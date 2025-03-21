@@ -12,6 +12,15 @@ export interface WeatherData {
   windSpeed?: number;
 }
 
+export interface ForecastDay {
+  date: string;
+  day: string;
+  condition: string;
+  highTemp: number;
+  lowTemp: number;
+  precipitation: number;
+}
+
 /**
  * Gets weather data for the current location
  * Note: This is currently mocked data
@@ -33,6 +42,45 @@ export async function getWeatherData(): Promise<WeatherData> {
 }
 
 /**
+ * Gets forecast data for the next several days
+ * Note: This is currently mocked data
+ */
+export async function getForecastData(days: number = 5): Promise<ForecastDay[]> {
+  // Simulate API call
+  await new Promise(resolve => setTimeout(resolve, 150));
+  
+  const forecast: ForecastDay[] = [];
+  const conditions = ['clear', 'partly-cloudy', 'cloudy', 'rain', 'storm', 'snow'];
+  const today = new Date();
+  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  for (let i = 1; i <= days; i++) {
+    const nextDate = new Date(today);
+    nextDate.setDate(today.getDate() + i);
+    
+    const dayName = daysOfWeek[nextDate.getDay()];
+    const dateString = nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    
+    // Randomize weather conditions for demonstration
+    const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
+    const highTemp = Math.round(65 + Math.random() * 20); // Random temp between 65-85
+    const lowTemp = Math.round(highTemp - (5 + Math.random() * 15)); // Random temp 5-20 degrees lower
+    const precipitation = Math.round(Math.random() * 100);
+    
+    forecast.push({
+      date: dateString,
+      day: dayName,
+      condition: randomCondition,
+      highTemp,
+      lowTemp,
+      precipitation
+    });
+  }
+  
+  return forecast;
+}
+
+/**
  * Checks if it's currently daytime
  * This is a simple implementation for demonstration purposes
  */
@@ -45,12 +93,12 @@ export function isDayTime(): boolean {
  * Converts temperature from Fahrenheit to Celsius
  */
 export function toCelsius(fahrenheit: number): number {
-  return (fahrenheit - 32) * 5/9;
+  return Math.round((fahrenheit - 32) * 5/9);
 }
 
 /**
  * Converts temperature from Celsius to Fahrenheit
  */
 export function toFahrenheit(celsius: number): number {
-  return celsius * 9/5 + 32;
+  return Math.round(celsius * 9/5 + 32);
 } 

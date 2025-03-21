@@ -1,7 +1,10 @@
 import { Suspense } from 'react';
 import WeatherCard from './components/WeatherCard';
 import WeatherContainer from './components/WeatherContainer';
-import { getWeatherData, isDayTime, WeatherData } from './lib/weatherService';
+import ForecastSection from './components/ForecastSection';
+import { getWeatherData, getForecastData, isDayTime, WeatherData } from './lib/weatherService';
+import LocationSelectorWrapper from './components/LocationSelectorWrapper';
+import TemperatureUnitProvider from './components/TemperatureUnitProvider';
 
 // Define our extended weather data that will have all required properties
 interface EnhancedWeatherData extends WeatherData {
@@ -22,6 +25,9 @@ export default async function Home({
   
   // Determine if it's day or night
   const timeOfDay = isDayTime() ? 'day' : 'night';
+  
+  // Fetch forecast data
+  const forecastData = await getForecastData(5);
   
   // Enable different weather scenarios for demonstration
   const scenarios = [
@@ -77,22 +83,37 @@ export default async function Home({
       
       {/* Content overlay */}
       <div className="relative z-10 min-h-screen p-4 md:p-8 flex flex-col items-center">
-        <h1 className="text-3xl font-bold text-center mb-8 text-white drop-shadow-lg">
-          Weather App
-        </h1>
-        
-        <div className="flex-grow flex items-center justify-center w-full max-w-md">
-          {/* Weather Card */}
-          <WeatherCard data={enhancedWeatherData} />
+        <div className="w-full max-w-md">
+          <header className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-bold text-white drop-shadow-lg">Weather App</h1>
+            
+            {/* Location Selector (Client Component) */}
+            <LocationSelectorWrapper initialLocation={enhancedWeatherData.location} />
+          </header>
+          
+          <TemperatureUnitProvider>
+            <div className="space-y-4">
+              {/* Weather Card */}
+              <WeatherCard data={enhancedWeatherData} />
+              
+              {/* Forecast Section */}
+              <Suspense fallback={<div className="glass-card rounded-2xl p-5 animate-pulse h-48">Loading forecast...</div>}>
+                <ForecastSection forecast={forecastData} />
+              </Suspense>
+            </div>
+          </TemperatureUnitProvider>
         </div>
         
-        <footer className="mt-12 text-center text-white drop-shadow-md">
+        <footer className="mt-12 text-center text-white drop-shadow-md text-sm">
           <p>
             Weather information is currently mocked for development purposes.
             Currently showing: <span className="font-semibold capitalize">{currentScenario.name}</span> conditions.
           </p>
-          <p className="mt-2 text-sm">
+          <p className="mt-2">
             Weather conditions will automatically change based on the time of day.
+          </p>
+          <p className="mt-4 text-xs opacity-70">
+            &copy; {new Date().getFullYear()} Weather App. All rights reserved.
           </p>
         </footer>
       </div>
