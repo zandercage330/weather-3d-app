@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import WeatherCard from './components/WeatherCard';
 import ForecastSection from './components/ForecastSection';
-import LocationSelectorWrapper from './components/LocationSelectorWrapper';
+import LocationSelector from './components/LocationSelector';
 import { TemperatureUnitProvider } from './components/TemperatureUnitProvider';
 import RefreshButton from './components/RefreshButton';
 import WeatherAlerts from './components/WeatherAlerts';
@@ -53,7 +53,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
             <h1 className="text-3xl md:text-4xl font-bold">Weather App</h1>
             <div className="flex items-center gap-4">
-              <LocationSelectorWrapper onLocationChange={handleLocationChange} />
+              <LocationSelector currentLocation={selectedLocation} onLocationChange={handleLocationChange} />
               <RefreshButton onClick={fetchWeatherData} isLoading={isLoading} />
             </div>
           </div>
