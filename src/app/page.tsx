@@ -7,6 +7,7 @@ import LocationSelector from './components/LocationSelector';
 import { TemperatureUnitProvider } from './components/TemperatureUnitProvider';
 import RefreshButton from './components/RefreshButton';
 import WeatherAlerts from './components/WeatherAlerts';
+import WeatherBackground from './components/WeatherBackground';
 import { getWeatherData, getForecastData, WeatherData, ForecastDay } from './lib/weatherService';
 
 export default function Home() {
@@ -48,45 +49,47 @@ export default function Home() {
 
   return (
     <TemperatureUnitProvider>
-      <main className="flex min-h-screen flex-col items-center p-4 md:p-8 lg:p-12 bg-gradient-to-b from-blue-900 to-blue-700 text-white">
-        <div className="w-full max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-            <h1 className="text-3xl md:text-4xl font-bold">Weather App</h1>
-            <div className="flex items-center gap-4">
-              <LocationSelector currentLocation={selectedLocation} onLocationChange={handleLocationChange} />
-              <RefreshButton onClick={fetchWeatherData} isLoading={isLoading} />
+      <WeatherBackground weatherData={weatherData}>
+        <main className="flex min-h-screen flex-col items-center p-4 md:p-8 lg:p-12 text-white">
+          <div className="w-full max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
+              <h1 className="text-3xl md:text-4xl font-bold">Weather App</h1>
+              <div className="flex items-center gap-4">
+                <LocationSelector currentLocation={selectedLocation} onLocationChange={handleLocationChange} />
+                <RefreshButton onClick={fetchWeatherData} isLoading={isLoading} />
+              </div>
             </div>
-          </div>
 
-          {/* Main content grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main weather card and alerts in first column */}
-            <div className="lg:col-span-1 space-y-6">
-              <WeatherCard 
-                weatherData={weatherData} 
-                isLoading={isLoading} 
-              />
+            {/* Main content grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Main weather card and alerts in first column */}
+              <div className="lg:col-span-1 space-y-6">
+                <WeatherCard 
+                  weatherData={weatherData} 
+                  isLoading={isLoading} 
+                />
+                
+                <WeatherAlerts 
+                  stateCode={getStateCode(selectedLocation)} 
+                />
+              </div>
               
-              <WeatherAlerts 
-                stateCode={getStateCode(selectedLocation)} 
-              />
+              {/* Forecast section spans two columns on large screens */}
+              <div className="lg:col-span-2">
+                <ForecastSection 
+                  forecastData={forecastData} 
+                  isLoading={isLoading} 
+                />
+              </div>
             </div>
             
-            {/* Forecast section spans two columns on large screens */}
-            <div className="lg:col-span-2">
-              <ForecastSection 
-                forecastData={forecastData} 
-                isLoading={isLoading} 
-              />
-            </div>
+            <footer className="mt-8 text-center text-sm text-white/60">
+              <p>Real-time weather data powered by MCP Weather</p>
+              <p className="mt-1">© {new Date().getFullYear()} Weather App</p>
+            </footer>
           </div>
-          
-          <footer className="mt-8 text-center text-sm text-white/60">
-            <p>Real-time weather data powered by MCP Weather</p>
-            <p className="mt-1">© {new Date().getFullYear()} Weather App</p>
-          </footer>
-        </div>
-      </main>
+        </main>
+      </WeatherBackground>
     </TemperatureUnitProvider>
   );
 } 
