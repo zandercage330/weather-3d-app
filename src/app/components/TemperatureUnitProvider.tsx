@@ -1,43 +1,45 @@
 'use client';
 
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import { createContext, useContext, useState, ReactNode } from 'react';
 
-type TemperatureUnit = 'F' | 'C';
+export type TemperatureUnit = 'C' | 'F';
 
-interface TemperatureUnitContextType {
-  tempUnit: TemperatureUnit;
-  setTempUnit: (unit: TemperatureUnit) => void;
-  toggleTempUnit: () => void;
+export interface TemperatureUnitContextType {
+  unit: TemperatureUnit;
+  toggleUnit: () => void;
 }
 
-// Create context
-export const TemperatureUnitContext = createContext<TemperatureUnitContextType | undefined>(undefined);
-
-// Custom hook to use the context
-export const useTemperatureUnit = () => {
-  const context = useContext(TemperatureUnitContext);
-  if (!context) {
-    throw new Error('useTemperatureUnit must be used within a TemperatureUnitProvider');
-  }
-  return context;
-};
+const TemperatureUnitContext = createContext<TemperatureUnitContextType | null>(null);
 
 interface TemperatureUnitProviderProps {
   children: ReactNode;
 }
 
-const TemperatureUnitProvider: React.FC<TemperatureUnitProviderProps> = ({ children }) => {
-  const [tempUnit, setTempUnit] = useState<TemperatureUnit>('F');
+export function TemperatureUnitProvider({ children }: TemperatureUnitProviderProps) {
+  const [unit, setUnit] = useState<TemperatureUnit>('F');
 
-  const toggleTempUnit = () => {
-    setTempUnit(tempUnit === 'F' ? 'C' : 'F');
+  const toggleUnit = () => {
+    setUnit(prevUnit => (prevUnit === 'F' ? 'C' : 'F'));
   };
 
   return (
-    <TemperatureUnitContext.Provider value={{ tempUnit, setTempUnit, toggleTempUnit }}>
+    <TemperatureUnitContext.Provider
+      value={{
+        unit,
+        toggleUnit
+      }}
+    >
       {children}
     </TemperatureUnitContext.Provider>
   );
-};
+}
 
-export default TemperatureUnitProvider; 
+export function useTemperatureUnit(): TemperatureUnitContextType {
+  const context = useContext(TemperatureUnitContext);
+  
+  if (!context) {
+    throw new Error('useTemperatureUnit must be used within a TemperatureUnitProvider');
+  }
+  
+  return context;
+} 

@@ -1,19 +1,37 @@
 'use client';
 
-import React from 'react';
-import { ForecastDay } from '../lib/weatherService';
-import { toCelsius } from '../lib/weatherService';
 import { useTemperatureUnit } from './TemperatureUnitProvider';
+import { ForecastDay, toCelsius } from '../lib/weatherService';
 
-interface ForecastSectionProps {
-  forecast: ForecastDay[];
+export interface ForecastSectionProps {
+  forecastData: ForecastDay[];
+  isLoading: boolean;
 }
 
-const ForecastSection: React.FC<ForecastSectionProps> = ({ forecast }) => {
-  const { tempUnit } = useTemperatureUnit();
+export default function ForecastSection({ forecastData, isLoading }: ForecastSectionProps) {
+  const { unit } = useTemperatureUnit();
   
-  // Map condition to emoji
-  const getWeatherEmoji = (condition: string) => {
+  // Display loading skeleton while data is loading
+  if (isLoading) {
+    return (
+      <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 shadow-lg animate-pulse">
+        <div className="h-8 bg-white/20 rounded w-1/3 mb-6"></div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-28 bg-white/20 rounded"></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  // Helper to format temperature based on selected unit
+  const formatTemp = (temp: number) => {
+    return unit === 'F' ? temp : toCelsius(temp);
+  };
+  
+  // Helper to get weather icon based on condition
+  const getWeatherIcon = (condition: string) => {
     switch (condition) {
       case 'clear':
         return '☀️';
@@ -34,62 +52,33 @@ const ForecastSection: React.FC<ForecastSectionProps> = ({ forecast }) => {
     }
   };
 
-  // Format condition for display
-  const formatCondition = (condition: string) => {
-    return condition
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-  
-  // Format temperature based on selected unit
-  const formatTemperature = (temp: number) => {
-    return tempUnit === 'F' ? Math.round(temp) : Math.round(toCelsius(temp));
-  };
-
   return (
-    <div className="glass-card rounded-2xl p-5 w-full mt-4">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">5-Day Forecast</h3>
+    <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 shadow-lg">
+      <h3 className="text-xl font-bold mb-4">5-Day Forecast</h3>
       
-      <div className="divide-y divide-white/20 dark:divide-gray-700/60">
-        {forecast.map((day, index) => (
-          <div key={index} className={`py-3 ${index === 0 ? '' : 'pt-4'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="font-medium text-gray-900 dark:text-white">{day.day}</div>
-                <div className="text-xs text-gray-700 dark:text-gray-400">{day.date}</div>
-              </div>
-              
-              <div className="flex-1 text-center flex flex-col items-center">
-                <div className="text-2xl">{getWeatherEmoji(day.condition)}</div>
-                <div className="text-xs mt-1 text-gray-700 dark:text-gray-400">
-                  {formatCondition(day.condition)}
-                </div>
-              </div>
-              
-              <div className="flex-1 text-right">
-                <div className="font-medium text-gray-900 dark:text-white">
-                  {formatTemperature(day.highTemp)}°{tempUnit}
-                </div>
-                <div className="text-xs text-gray-700 dark:text-gray-400">
-                  {formatTemperature(day.lowTemp)}°{tempUnit}
-                </div>
-              </div>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        {forecastData.map((day, index) => (
+          <div key={index} className="bg-white/10 backdrop-blur-sm rounded-lg p-3 text-center">
+            <div className="font-medium">{day.day}</div>
+            <div className="text-sm opacity-70 mb-2">{day.date}</div>
+            
+            <div className="text-3xl mb-2">{getWeatherIcon(day.condition)}</div>
+            
+            <div className="flex justify-between text-sm px-1">
+              <span>High: {formatTemp(day.highTemp)}°{unit}</span>
+              <span>Low: {formatTemp(day.lowTemp)}°{unit}</span>
             </div>
             
-            {/* Precipitation indicator */}
-            {day.precipitation > 0 && (
-              <div className="mt-2 flex items-center">
-                <span className="text-xs text-blue-500 dark:text-blue-400">
-                  💧 {day.precipitation}% chance of precipitation
+            <div className="mt-2 text-xs">
+              {day.precipitation > 0 && (
+                <span className="inline-flex items-center">
+                  <span>💧 {day.precipitation}%</span>
                 </span>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ))}
       </div>
     </div>
   );
-};
-
-export default ForecastSection; 
+} 

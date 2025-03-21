@@ -1,46 +1,39 @@
 'use client';
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 
-interface RefreshButtonProps {
-  onRefresh: () => Promise<void>;
+export interface RefreshButtonProps {
+  onClick: () => Promise<void>;
+  isLoading: boolean;
 }
 
-const RefreshButton: React.FC<RefreshButtonProps> = ({ onRefresh }) => {
+export default function RefreshButton({ onClick, isLoading }: RefreshButtonProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = async () => {
-    if (isRefreshing) return;
+    if (isLoading || isRefreshing) return;
     
     setIsRefreshing(true);
-    
     try {
-      await onRefresh();
-    } catch (error) {
-      console.error('Failed to refresh:', error);
+      await onClick();
     } finally {
-      // Add a slight delay to show the refreshing state
-      setTimeout(() => {
-        setIsRefreshing(false);
-      }, 1000);
+      setIsRefreshing(false);
     }
   };
 
   return (
     <button 
       onClick={handleRefresh}
-      disabled={isRefreshing}
-      className={`p-2 rounded-full glass-card bg-white/20 dark:bg-black/20 
-        hover:bg-white/30 dark:hover:bg-black/30 transition-colors
-        text-gray-900 dark:text-white focus:outline-none ${isRefreshing ? 'opacity-70' : ''}`}
+      disabled={isLoading || isRefreshing}
+      className="bg-blue-500 hover:bg-blue-600 disabled:bg-blue-800/50 disabled:cursor-not-allowed text-white p-2 rounded-full transition-colors"
       aria-label="Refresh weather data"
     >
       <svg 
-        className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} 
+        xmlns="http://www.w3.org/2000/svg" 
+        className={`h-5 w-5 ${(isLoading || isRefreshing) ? 'animate-spin' : ''}`} 
         fill="none" 
-        stroke="currentColor" 
         viewBox="0 0 24 24" 
-        xmlns="http://www.w3.org/2000/svg"
+        stroke="currentColor"
       >
         <path 
           strokeLinecap="round" 
@@ -51,6 +44,4 @@ const RefreshButton: React.FC<RefreshButtonProps> = ({ onRefresh }) => {
       </svg>
     </button>
   );
-};
-
-export default RefreshButton; 
+} 
