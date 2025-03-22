@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { WeatherData } from '../lib/weatherService';
+import WeatherEffectsManager from './weather-effects/WeatherEffectsManager';
 
 export interface WeatherBackgroundProps {
   weatherData: WeatherData | null;
@@ -13,22 +14,28 @@ export interface WeatherBackgroundProps {
  * Creates atmospheric effects appropriate for the current weather
  */
 export default function WeatherBackground({ weatherData, children }: WeatherBackgroundProps) {
-  // State for animation particles
-  const [particles, setParticles] = useState<React.ReactNode[]>([]);
+  // State for user preferences
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [effectIntensity, setEffectIntensity] = useState<'none' | 'low' | 'medium' | 'high'>('medium');
   
-  // Update particles when weather changes
+  // Check user preference for reduced motion
   useEffect(() => {
-    if (!weatherData) return;
+    // Check if user prefers reduced motion
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setReducedMotion(prefersReducedMotion);
     
-    // Generate appropriate particles based on weather condition
-    const newParticles = generateParticlesForWeather(weatherData);
-    setParticles(newParticles);
-    
-    // Cleanup function
-    return () => {
-      setParticles([]);
+    // Listen for changes to the preference
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const handleMotionPreferenceChange = (e: MediaQueryListEvent) => {
+      setReducedMotion(e.matches);
     };
-  }, [weatherData]);
+    
+    mediaQuery.addEventListener('change', handleMotionPreferenceChange);
+    
+    return () => {
+      mediaQuery.removeEventListener('change', handleMotionPreferenceChange);
+    };
+  }, []);
 
   // Get background gradient based on weather and time
   const backgroundStyle = getBackgroundStyle(weatherData);
@@ -39,10 +46,12 @@ export default function WeatherBackground({ weatherData, children }: WeatherBack
       style={backgroundStyle}
       aria-label={weatherData ? `Weather background: ${weatherData.condition} during ${weatherData?.timeOfDay || 'day'}` : 'Loading weather background'}
     >
-      {/* Weather effect particles */}
-      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-        {particles}
-      </div>
+      {/* Weather effects */}
+      <WeatherEffectsManager 
+        weatherData={weatherData}
+        intensity={effectIntensity}
+        reducedMotion={reducedMotion}
+      />
       
       {/* Content */}
       <div className="relative z-10">
@@ -127,99 +136,4 @@ function getBackgroundStyle(weatherData: WeatherData | null): React.CSSPropertie
   
   // Return the appropriate style or a default one
   return backgroundStyles[styleKey] || backgroundStyles[`partly-cloudy-${timeOfDay}`];
-}
-
-/**
- * Generates animated particles appropriate for the current weather condition
- */
-function generateParticlesForWeather(weatherData: WeatherData): React.ReactNode[] {
-  const { condition } = weatherData;
-  const particles: React.ReactNode[] = [];
-  
-  // Number of particles to generate
-  let count = 0;
-  
-  // Configure particles based on condition
-  switch (condition) {
-    case 'rain':
-      count = 50;
-      for (let i = 0; i < count; i++) {
-        const left = `${Math.random() * 100}%`;
-        const animationDuration = 0.5 + Math.random() * 0.5; // 0.5-1s
-        const animationDelay = Math.random() * 2;
-        
-        particles.push(
-          <div 
-            key={`rain-${i}`}
-            className="absolute rounded-full bg-white/60"
-            style={{
-              left,
-              top: -10,
-              width: '1px',
-              height: '10px',
-              animation: `fall ${animationDuration}s linear ${animationDelay}s infinite`,
-              opacity: 0.6 + Math.random() * 0.4
-            }}
-          />
-        );
-      }
-      break;
-    
-    case 'snow':
-      count = 30;
-      for (let i = 0; i < count; i++) {
-        const left = `${Math.random() * 100}%`;
-        const size = 2 + Math.random() * 3; // 2-5px
-        const animationDuration = 3 + Math.random() * 5; // 3-8s
-        const animationDelay = Math.random() * 5;
-        
-        particles.push(
-          <div 
-            key={`snow-${i}`}
-            className="absolute rounded-full bg-white"
-            style={{
-              left,
-              top: -10,
-              width: `${size}px`,
-              height: `${size}px`,
-              animation: `snowfall ${animationDuration}s linear ${animationDelay}s infinite`,
-              opacity: 0.7 + Math.random() * 0.3
-            }}
-          />
-        );
-      }
-      break;
-    
-    case 'cloudy':
-    case 'partly-cloudy':
-      count = 3;
-      for (let i = 0; i < count; i++) {
-        const left = `${20 + Math.random() * 60}%`;
-        const top = `${10 + Math.random() * 40}%`;
-        const size = 100 + Math.random() * 100; // 100-200px
-        
-        particles.push(
-          <div 
-            key={`cloud-${i}`}
-            className="absolute bg-white/20 rounded-full"
-            style={{
-              left,
-              top,
-              width: `${size}px`,
-              height: `${size * 0.6}px`,
-              filter: 'blur(20px)',
-              animation: 'float 15s ease-in-out infinite',
-              animationDelay: `${i * 5}s`
-            }}
-          />
-        );
-      }
-      break;
-      
-    default:
-      // For clear days or unhandled conditions
-      break;
-  }
-  
-  return particles;
 } 

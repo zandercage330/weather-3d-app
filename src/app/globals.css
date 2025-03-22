@@ -119,3 +119,84 @@ body {
     opacity: 0;
   }
 }
+
+/* New weather effect animations */
+@keyframes lightning {
+  0%, 95%, 100% {
+    opacity: 0;
+  }
+  96%, 96.5% {
+    opacity: 0.6;
+  }
+  96.6%, 97% {
+    opacity: 0;
+  }
+  97.1%, 97.8% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes fog-move {
+  0% {
+    transform: translateX(-5%) translateY(0);
+  }
+  50% {
+    transform: translateX(5%) translateY(-2%);
+  }
+  100% {
+    transform: translateX(-5%) translateY(0);
+  }
+}
+
+@keyframes cloud-drift {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(110%);
+  }
+}
+
+@keyframes sun-rays {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05) rotate(1deg);
+  }
+}
+
+@keyframes star-twinkle {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+}
+
+@keyframes splash {
+  0% {
+    transform: scale(0);
+    opacity: 0.7;
+  }
+  70% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion) {
+  .weather-effect {
+    animation: none !important;
+    transition: none !important;
+  }
+}
