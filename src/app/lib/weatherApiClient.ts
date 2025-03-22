@@ -4,7 +4,7 @@
  * to fetch weather data from WeatherAPI without exposing the API key
  */
 
-import { WeatherData, ForecastDay, WeatherAlert } from './weatherService';
+import { WeatherData, ForecastDay, WeatherAlert, AirQualityData } from './weatherService';
 
 // Types for WeatherAPI responses based on their API documentation
 interface WeatherApiCurrentResponse {
@@ -33,6 +33,17 @@ interface WeatherApiCurrentResponse {
     precip_mm: number;
     precip_in: number;
     is_day: number;
+    uv: number;
+    air_quality?: {
+      co: number;
+      no2: number;
+      o3: number;
+      so2: number;
+      pm2_5: number;
+      pm10: number;
+      'us-epa-index': number;
+      'gb-defra-index': number;
+    };
   };
 }
 
@@ -49,6 +60,17 @@ interface WeatherApiForecastResponse {
       text: string;
       icon: string;
       code: number;
+    };
+    uv: number;
+    air_quality?: {
+      co: number;
+      no2: number;
+      o3: number;
+      so2: number;
+      pm2_5: number;
+      pm10: number;
+      'us-epa-index': number;
+      'gb-defra-index': number;
     };
   };
   forecast: {
@@ -92,6 +114,7 @@ interface WeatherApiForecastResponse {
           code: number;
         };
         chance_of_rain: number;
+        uv: number;
       }>;
     }>;
   };
@@ -210,7 +233,63 @@ export function parseCurrentWeather(data: WeatherApiCurrentResponse): WeatherDat
     precipitation: data.current.precip_in * 100, // Convert to percentage chance
     humidity: data.current.humidity,
     cloudCover: data.current.cloud / 100,  // Convert to decimal
-    windSpeed: Math.round(data.current.wind_mph)
+    windSpeed: Math.round(data.current.wind_mph),
+    uvIndex: data.current.uv,
+    airQuality: parseAirQuality(data.current.air_quality)
+  };
+}
+
+/**
+ * Parse air quality data from WeatherAPI
+ */
+export function parseAirQuality(airQualityData?: WeatherApiCurrentResponse['current']['air_quality']): AirQualityData | null {
+  if (!airQualityData) return null;
+  
+  // Get the EPA Air Quality Index (1-6 scale)
+  const aqiValue = airQualityData['us-epa-index'];
+  
+  // Map AQI value to our descriptive categories
+  let category: AirQualityData['category'];
+  let description: string;
+  
+  switch (aqiValue) {
+    case 1:
+      category = 'good';
+      description = 'Air quality is considered satisfactory, and air pollution poses little or no risk.';
+      break;
+    case 2:
+      category = 'moderate';
+      description = 'Air quality is acceptable; however, for some pollutants there may be a moderate health concern for a very small number of people.';
+      break;
+    case 3:
+      category = 'unhealthyForSensitive';
+      description = 'Members of sensitive groups may experience health effects. The general public is not likely to be affected.';
+      break;
+    case 4:
+      category = 'unhealthy';
+      description = 'Everyone may begin to experience health effects; members of sensitive groups may experience more serious health effects.';
+      break;
+    case 5:
+      category = 'veryUnhealthy';
+      description = 'Health alert: everyone may experience more serious health effects.';
+      break;
+    case 6:
+      category = 'hazardous';
+      description = 'Health warnings of emergency conditions. The entire population is more likely to be affected.';
+      break;
+    default:
+      category = 'unknown';
+      description = 'Air quality information is not available.';
+  }
+  
+  return {
+    index: aqiValue,
+    category,
+    description,
+    pm2_5: Math.round(airQualityData.pm2_5 * 10) / 10,
+    pm10: Math.round(airQualityData.pm10 * 10) / 10,
+    o3: Math.round(airQualityData.o3 * 10) / 10,
+    no2: Math.round(airQualityData.no2 * 10) / 10
   };
 }
 
@@ -233,7 +312,8 @@ export function parseForecast(data: WeatherApiForecastResponse): ForecastDay[] {
         precipitation: hour.chance_of_rain,
         windSpeed: Math.round(hour.wind_mph),
         humidity: hour.humidity,
-        feelsLike: Math.round(hour.feelslike_f)
+        feelsLike: Math.round(hour.feelslike_f),
+        uvIndex: hour.uv
       };
     });
     
@@ -249,30 +329,56 @@ export function parseForecast(data: WeatherApiForecastResponse): ForecastDay[] {
       windDirection: day.hour[12]?.wind_dir || 'N', // Use noon hour wind direction as representative
       sunrise: day.astro.sunrise,
       sunset: day.astro.sunset,
-      description: day.day.condition.text,
-      uvIndex: Math.round(day.day.uv),
+      description: getDescriptionFromCondition(mapWeatherApiCondition(day.day.condition.code, true)),
+      uvIndex: day.day.uv,
       hourlyForecast
     };
   });
 }
 
+// Helper function imported into this file from weatherService
+function getDescriptionFromCondition(condition: string): string {
+  switch (condition) {
+    case 'clear':
+      return 'Clear sky throughout the day.';
+    case 'partly-cloudy':
+      return 'Partly cloudy conditions expected.';
+    case 'cloudy':
+      return 'Cloudy skies throughout the day.';
+    case 'rain':
+      return 'Rain showers expected.';
+    case 'storm':
+      return 'Stormy conditions with possible thunderstorms.';
+    case 'snow':
+      return 'Snow is expected.';
+    case 'sleet':
+      return 'Sleet or wintry mix expected.';
+    case 'fog':
+      return 'Foggy conditions expected.';
+    default:
+      return 'Mixed weather conditions throughout the day.';
+  }
+}
+
 /**
- * Parses WeatherAPI alerts to our internal format
+ * Parses the WeatherAPI alerts to our internal format
  */
 export function parseAlerts(data: WeatherApiForecastResponse): WeatherAlert[] {
-  if (!data.alerts || !data.alerts.alert || !data.alerts.alert.length) {
+  if (!data.alerts || !data.alerts.alert || data.alerts.alert.length === 0) {
     return [];
   }
   
   return data.alerts.alert.map(alert => {
-    // Map severity to our internal format
-    let severity: 'Minor' | 'Moderate' | 'Severe' | 'Extreme' = 'Moderate';
+    let severity: WeatherAlert['severity'] = 'Minor';
     
-    const severityLower = alert.severity.toLowerCase();
-    if (severityLower.includes('minor')) severity = 'Minor';
-    if (severityLower.includes('moderate')) severity = 'Moderate';
-    if (severityLower.includes('severe')) severity = 'Severe';
-    if (severityLower.includes('extreme')) severity = 'Extreme';
+    // Map WeatherAPI severity to our format
+    if (alert.severity.toLowerCase().includes('moderate')) {
+      severity = 'Moderate';
+    } else if (alert.severity.toLowerCase().includes('severe')) {
+      severity = 'Severe';
+    } else if (alert.severity.toLowerCase().includes('extreme')) {
+      severity = 'Extreme';
+    }
     
     return {
       eventType: alert.event,

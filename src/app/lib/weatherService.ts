@@ -21,6 +21,18 @@ export interface WeatherData {
   humidity?: number;
   cloudCover?: number;
   windSpeed?: number;
+  uvIndex: number;
+  airQuality: AirQualityData | null;
+}
+
+export interface AirQualityData {
+  index: number;
+  category: 'good' | 'moderate' | 'unhealthyForSensitive' | 'unhealthy' | 'veryUnhealthy' | 'hazardous' | 'unknown';
+  description: string;
+  pm2_5: number; // PM2.5 (μg/m3)
+  pm10: number;  // PM10 (μg/m3)
+  o3: number;    // Ozone (ppb)
+  no2: number;   // Nitrogen dioxide (ppb)
 }
 
 export interface ForecastDay {
@@ -48,6 +60,7 @@ export interface HourlyForecast {
   windSpeed?: number;
   humidity?: number;
   feelsLike?: number;
+  uvIndex: number;
 }
 
 export interface WeatherAlert {
@@ -244,7 +257,9 @@ export function getFallbackWeatherData(location: string = 'New York, NY'): Weath
     precipitation: 20,
     humidity: 45,
     cloudCover: 0.4,
-    windSpeed: 8
+    windSpeed: 8,
+    uvIndex: 5,
+    airQuality: null
   };
 }
 
@@ -293,7 +308,8 @@ export function getFallbackForecastData(): ForecastDay[] {
         precipitation: Math.round(Math.random() * 100),
         windSpeed: Math.round(Math.random() * 15) + 5,
         humidity: Math.round(Math.random() * 40) + 40,
-        feelsLike: hourTemp - Math.round(Math.random() * 5)
+        feelsLike: hourTemp - Math.round(Math.random() * 5),
+        uvIndex: Math.round(Math.random() * 10) + 1
       });
     }
     

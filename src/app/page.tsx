@@ -10,6 +10,9 @@ import WeatherBackground from './components/WeatherBackground';
 import ApiTester from './components/ApiTester';
 import SettingsButton from './components/SettingsButton';
 import ThemeProvider from './components/ThemeProvider';
+import AirQualityCard from './components/AirQualityCard';
+import UVIndexCard from './components/UVIndexCard';
+import ActivityRecommendations from './components/ActivityRecommendations';
 import { UserPreferencesProvider, useUserPreferences } from './hooks/useUserPreferences';
 import { getWeatherData, getForecastData, WeatherData, ForecastDay } from './lib/weatherService';
 import dynamic from 'next/dynamic';
@@ -40,6 +43,7 @@ function HomeContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [showApiTester, setShowApiTester] = useState(false);
   const [showWeatherMap, setShowWeatherMap] = useState(false);
+  const [showAdvancedFeatures, setShowAdvancedFeatures] = useState(false);
   
   // When defaultLocation changes in preferences, update selectedLocation
   useEffect(() => {
@@ -107,6 +111,13 @@ function HomeContent() {
                 >
                   {showWeatherMap ? 'Hide' : 'Show'} Radar Map
                 </button>
+                <span className="text-white/30">|</span>
+                <button
+                  onClick={() => setShowAdvancedFeatures(!showAdvancedFeatures)}
+                  className="text-xs text-white/60 hover:text-white"
+                >
+                  {showAdvancedFeatures ? 'Hide' : 'Show'} Advanced Features
+                </button>
               </div>
             </div>
           </div>
@@ -135,6 +146,18 @@ function HomeContent() {
                 userPreferences={preferences}
               />
               
+              {weatherData && weatherData.uvIndex && showAdvancedFeatures && (
+                <UVIndexCard 
+                  uvIndex={weatherData.uvIndex} 
+                />
+              )}
+              
+              {weatherData && weatherData.airQuality && showAdvancedFeatures && (
+                <AirQualityCard 
+                  airQuality={weatherData.airQuality} 
+                />
+              )}
+              
               <WeatherAlerts 
                 stateCode={getStateCode(selectedLocation)} 
               />
@@ -147,6 +170,15 @@ function HomeContent() {
                 isLoading={isLoading} 
                 userPreferences={preferences}
               />
+              
+              {weatherData && forecastData.length > 0 && showAdvancedFeatures && (
+                <div className="mt-6">
+                  <ActivityRecommendations 
+                    weatherData={weatherData} 
+                    forecast={forecastData} 
+                  />
+                </div>
+              )}
             </div>
           </div>
           

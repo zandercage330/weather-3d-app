@@ -79,11 +79,11 @@ export async function GET(request: NextRequest) {
     const sanitizedQ = encodeURIComponent(q);
     const sanitizedDays = encodeURIComponent(days);
     
-    apiUrl = `${baseUrl}/${endpoint}.json?key=${apiKey}&q=${sanitizedQ}`;
+    apiUrl = `${baseUrl}/${endpoint}.json?key=${apiKey}&q=${sanitizedQ}&aqi=yes`;
     
     // Add days parameter for forecast endpoint
     if (endpoint === 'forecast') {
-      apiUrl += `&days=${sanitizedDays}&aqi=yes&alerts=yes`;
+      apiUrl += `&days=${sanitizedDays}&alerts=yes`;
     }
     
     // Make the request to WeatherAPI
