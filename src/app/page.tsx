@@ -12,6 +12,13 @@ import SettingsButton from './components/SettingsButton';
 import ThemeProvider from './components/ThemeProvider';
 import { UserPreferencesProvider, useUserPreferences } from './hooks/useUserPreferences';
 import { getWeatherData, getForecastData, WeatherData, ForecastDay } from './lib/weatherService';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the WeatherMapView component to avoid SSR issues with Leaflet
+const WeatherMapView = dynamic(() => import('./components/WeatherMapView'), { 
+  ssr: false,
+  loading: () => <div className="h-[500px] w-full bg-gray-800/50 rounded-lg flex items-center justify-center">Loading map...</div>
+});
 
 // Wrap the main content in the providers
 export default function Home() {
@@ -32,6 +39,7 @@ function HomeContent() {
   const [selectedLocation, setSelectedLocation] = useState<string>(preferences.defaultLocation);
   const [isLoading, setIsLoading] = useState(true);
   const [showApiTester, setShowApiTester] = useState(false);
+  const [showWeatherMap, setShowWeatherMap] = useState(false);
   
   // When defaultLocation changes in preferences, update selectedLocation
   useEffect(() => {
@@ -85,18 +93,35 @@ function HomeContent() {
               />
               <RefreshButton onClick={fetchWeatherData} isLoading={isLoading} />
               <SettingsButton />
-              <button 
-                onClick={() => setShowApiTester(!showApiTester)}
-                className="text-xs text-white/60 hover:text-white"
-              >
-                {showApiTester ? 'Hide' : 'Show'} API Tester
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowApiTester(!showApiTester)}
+                  className="text-xs text-white/60 hover:text-white"
+                >
+                  {showApiTester ? 'Hide' : 'Show'} API Tester
+                </button>
+                <span className="text-white/30">|</span>
+                <button 
+                  onClick={() => setShowWeatherMap(!showWeatherMap)}
+                  className="text-xs text-white/60 hover:text-white"
+                >
+                  {showWeatherMap ? 'Hide' : 'Show'} Radar Map
+                </button>
+              </div>
             </div>
           </div>
 
           {showApiTester && (
             <div className="mb-6">
               <ApiTester />
+            </div>
+          )}
+          
+          {showWeatherMap && (
+            <div className="mb-6">
+              <div className="bg-black/30 backdrop-blur-sm p-4 rounded-lg">
+                <WeatherMapView />
+              </div>
             </div>
           )}
 

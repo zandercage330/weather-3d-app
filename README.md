@@ -67,3 +67,32 @@ The application includes an API tester component that you can use to verify your
 ### Fallback Mechanism
 
 If the WeatherAPI calls fail for any reason, the application will fall back to the MCP weather tools, and if those fail as well, it will use simulated weather data.
+
+## Weather Maps and Radar
+
+The application includes an interactive weather radar map that shows precipitation data in real-time. This feature uses:
+
+- [RainViewer API](https://www.rainviewer.com/api.html) for radar imagery
+- [Leaflet](https://leafletjs.com/) for interactive maps
+- [React-Leaflet](https://react-leaflet.js.org/) for React integration
+
+### Features
+
+The weather map includes:
+
+- Real-time precipitation radar visualization
+- Animation controls for past radar frames
+- Precipitation forecast (nowcast) for the next 2 hours
+- Ability to switch between standard map and satellite view
+- Automatic geolocation detection
+- Custom weather marker for your location
+
+### How to Use
+
+1. Click the "Show Radar Map" button on the main page
+2. Use the playback controls to animate through radar frames
+3. Toggle between "Past Radar" and "Forecast" to see different time periods
+4. Switch between map types using the layer control in the top right
+5. Zoom and pan the map to explore different areas
+
+The radar data updates automatically every 10 minutes to ensure you have the latest precipitation information.
