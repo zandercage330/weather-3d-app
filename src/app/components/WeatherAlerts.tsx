@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getWeatherAlerts } from '../lib/weatherService';
+import GlassCard from './GlassCard';
 
 export interface WeatherAlert {
   eventType: string;
@@ -38,19 +39,39 @@ export default function WeatherAlerts({ stateCode }: WeatherAlertsProps) {
 
   if (isLoading) {
     return (
-      <div className="bg-white/10 backdrop-blur-lg rounded-lg p-4 shadow-lg animate-pulse">
+      <GlassCard className="p-4 animate-pulse">
         <div className="h-8 bg-white/20 rounded mb-4"></div>
         <div className="h-20 bg-white/20 rounded"></div>
-      </div>
+      </GlassCard>
     );
   }
 
+  // Determine card variant based on alert severity
+  const getCardVariant = () => {
+    if (alerts.length === 0) return 'success';
+    
+    // Check for extreme alerts
+    const hasExtreme = alerts.some(alert => alert.severity === 'Extreme');
+    if (hasExtreme) return 'danger';
+    
+    // Check for severe alerts
+    const hasSevere = alerts.some(alert => alert.severity === 'Severe');
+    if (hasSevere) return 'warning';
+    
+    // Default for minor/moderate alerts
+    return 'info';
+  };
+
   if (alerts.length === 0) {
     return (
-      <div className="bg-white/10 backdrop-blur-lg rounded-lg p-4 shadow-lg">
+      <GlassCard 
+        variant="success" 
+        intensity="light" 
+        className="p-4"
+      >
         <h3 className="text-xl font-semibold mb-2">Weather Alerts</h3>
         <p className="text-green-300">No active weather alerts for this area.</p>
-      </div>
+      </GlassCard>
     );
   }
 
@@ -71,7 +92,12 @@ export default function WeatherAlerts({ stateCode }: WeatherAlertsProps) {
   };
 
   return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-lg p-4 shadow-lg">
+    <GlassCard 
+      variant={getCardVariant()} 
+      intensity="medium" 
+      className="p-4"
+      hoverEffect={false}
+    >
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-xl font-semibold">Weather Alerts</h3>
         <button 
@@ -105,6 +131,6 @@ export default function WeatherAlerts({ stateCode }: WeatherAlertsProps) {
           + {alerts.length - 2} more alerts
         </p>
       )}
-    </div>
+    </GlassCard>
   );
 } 
