@@ -2,14 +2,16 @@
 
 import React, { useState } from 'react';
 
-interface LocationSelectorProps {
+export interface LocationSelectorProps {
   currentLocation: string;
   onLocationChange: (location: string) => void;
+  savedLocations?: string[];
 }
 
 const LocationSelector: React.FC<LocationSelectorProps> = ({ 
   currentLocation, 
-  onLocationChange 
+  onLocationChange,
+  savedLocations = []
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,8 +30,11 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     'Atlanta, GA'
   ];
 
+  // Use saved locations if provided, otherwise use popularLocations
+  const availableLocations = savedLocations.length > 0 ? savedLocations : popularLocations;
+
   // Filter locations based on search term
-  const filteredLocations = popularLocations.filter(
+  const filteredLocations = availableLocations.filter(
     location => location.toLowerCase().includes(searchTerm.toLowerCase())
   );
 

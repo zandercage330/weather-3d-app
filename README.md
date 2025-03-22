@@ -34,3 +34,36 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## WeatherAPI Integration
+
+This application uses [WeatherAPI](https://www.weatherapi.com/) to fetch real-time weather data. To use this feature, you need to:
+
+1. Sign up for a free WeatherAPI account at [weatherapi.com](https://www.weatherapi.com/)
+2. Get your API key from the dashboard
+3. Create a `.env.local` file in the root of the project with the following content:
+
+```
+WEATHER_API_KEY=your_api_key_here
+WEATHER_API_BASE_URL=https://api.weatherapi.com/v1
+```
+
+Replace `your_api_key_here` with your actual API key.
+
+### Security Features
+
+For security, this application:
+
+- Keeps the API key on the server side using Next.js API routes
+- Implements rate limiting to prevent abuse
+- Validates and sanitizes all user inputs
+- Uses proper error handling for API failures
+- Implements fallbacks when API calls fail
+
+### Testing the API
+
+The application includes an API tester component that you can use to verify your WeatherAPI integration is working correctly. Click the "Show API Tester" button on the main page to access this feature.
+
+### Fallback Mechanism
+
+If the WeatherAPI calls fail for any reason, the application will fall back to the MCP weather tools, and if those fail as well, it will use simulated weather data.

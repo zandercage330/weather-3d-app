@@ -4,7 +4,15 @@
  * parsed and transformed to match our application's data model.
  */
 
-import { WeatherData, ForecastDay, WeatherAlert } from './weatherService';
+import { 
+  WeatherData, 
+  ForecastDay, 
+  WeatherAlert, 
+  HourlyForecast 
+} from './weatherService';
+
+// Import helper functions from weather service
+import { toCelsius, toFahrenheit, getFallbackForecastData } from './weatherService';
 
 /**
  * Fetch forecast data from MCP weather tool
@@ -162,55 +170,82 @@ export function parseMCPCurrentWeather(mcpResponse: any, location: string): Weat
  * @returns Array of ForecastDay objects
  */
 export function parseMCPForecast(mcpResponse: any): ForecastDay[] {
-  try {
-    if (!mcpResponse?.forecasts || !mcpResponse.forecasts.length) {
-      throw new Error("Invalid MCP forecast response");
-    }
-    
-    const forecast: ForecastDay[] = [];
-    const forecasts = mcpResponse.forecasts;
-    
-    // Process only daytime forecasts (skip index 0 if it's night)
-    const startIdx = forecasts[0].isDaytime ? 0 : 1;
-    
-    for (let i = startIdx; i < forecasts.length; i += 2) {
-      // Skip if we don't have a day period
-      if (i >= forecasts.length || !forecasts[i].isDaytime) continue;
-      
-      const dayPeriod = forecasts[i];
-      const nightPeriod = i + 1 < forecasts.length ? forecasts[i + 1] : null;
-      
-      // Extract day name and format date
-      const startDate = new Date(dayPeriod.startTime);
-      const dayName = dayPeriod.name.replace('This ', ''); // Remove "This " prefix if present
-      const dateString = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      
-      // Extract temperatures
-      const highTemp = dayPeriod.temperature;
-      const lowTemp = nightPeriod ? nightPeriod.temperature : highTemp - 15;
-      
-      // Extract condition and estimate precipitation
-      const condition = mapMCPCondition(dayPeriod.shortForecast);
-      const precipitation = estimatePrecipitationFromForecast(dayPeriod.shortForecast, dayPeriod.detailedForecast);
-      
-      forecast.push({
-        date: dateString,
-        day: dayName,
-        condition,
-        highTemp,
-        lowTemp,
-        precipitation
-      });
-      
-      // Limit to 5 days
-      if (forecast.length >= 5) break;
-    }
-    
-    return forecast;
-  } catch (error) {
-    console.error("Error parsing MCP forecast:", error);
-    throw error;
+  // Ensure we have a valid response
+  if (!mcpResponse || !mcpResponse.daily_forecast) {
+    return getFallbackForecastData();
   }
+
+  const forecast: ForecastDay[] = [];
+  
+  // Process each day in the forecast
+  mcpResponse.daily_forecast.forEach((day: any) => {
+    const date = new Date(day.date);
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    // Map MCP condition to our internal condition format
+    const condition = mapMCPCondition(day.condition);
+    
+    // Generate hourly forecast data based on the daily data
+    // Since MCP doesn't provide hourly data, we'll simulate it
+    const hourlyForecast: HourlyForecast[] = [];
+    
+    // Create 8 entries for 3-hour intervals (24 hours / 3 = 8 intervals)
+    for (let hour = 0; hour < 24; hour += 3) {
+      const hourTime = new Date(date);
+      hourTime.setHours(hour);
+      
+      // Temperature fluctuates throughout the day
+      const tempRange = day.high_temperature - day.low_temperature;
+      let hourTemp = day.low_temperature;
+      
+      // Model temperature curve: lowest at night, highest in afternoon
+      if (hour >= 6 && hour <= 15) {
+        // Rising temperature from 6am to 3pm
+        hourTemp = day.low_temperature + tempRange * ((hour - 6) / 9);
+      } else if (hour > 15) {
+        // Falling temperature from 3pm to midnight
+        hourTemp = day.high_temperature - tempRange * ((hour - 15) / 9);
+      }
+      
+      // Map condition based on time of day
+      let hourlyCondition = condition;
+      if (hour < 6 || hour > 18) {
+        // At night, clear becomes clear-night, and cloudy conditions remain
+        hourlyCondition = condition === 'clear' ? 'clear' : condition;
+      }
+      
+      hourlyForecast.push({
+        time: hourTime.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }),
+        temperature: Math.round(hourTemp),
+        condition: hourlyCondition,
+        precipitation: day.precipitation_chance || 0,
+        windSpeed: day.wind_speed,
+        humidity: day.humidity || 50, // Default if not available
+        feelsLike: Math.round(hourTemp - (Math.random() * 5)) // Simulate feels like temperature
+      });
+    }
+    
+    // Create the forecast day entry
+    forecast.push({
+      date: dateString,
+      day: dayName,
+      condition,
+      highTemp: Math.round(day.high_temperature),
+      lowTemp: Math.round(day.low_temperature),
+      precipitation: day.precipitation_chance || 0,
+      humidity: day.humidity || 50, // Default if not available
+      windSpeed: day.wind_speed,
+      windDirection: day.wind_direction || 'N', // Default if not available
+      sunrise: day.sunrise || '6:30 AM', // Default if not available
+      sunset: day.sunset || '7:45 PM', // Default if not available
+      description: getDescriptionFromCondition(condition),
+      uvIndex: day.uv_index || Math.round(Math.random() * 10) + 1, // Generate if not available
+      hourlyForecast
+    });
+  });
+
+  return forecast;
 }
 
 /**
@@ -364,4 +399,26 @@ function mapAlertSeverity(severity: string): 'Minor' | 'Moderate' | 'Severe' | '
   if (severityLower.includes('minor')) return 'Minor';
   
   return 'Moderate';
+}
+
+// Helper function to get description from condition (reuse from weatherService)
+function getDescriptionFromCondition(condition: string): string {
+  switch (condition) {
+    case 'clear':
+      return 'Clear sky with full sunshine';
+    case 'partly-cloudy':
+      return 'Partly cloudy with some sun';
+    case 'cloudy':
+      return 'Overcast with cloud cover';
+    case 'rain':
+      return 'Light to moderate rainfall';
+    case 'storm':
+      return 'Thunderstorms with lightning';
+    case 'snow':
+      return 'Snow showers';
+    case 'fog':
+      return 'Foggy conditions with reduced visibility';
+    default:
+      return 'Varying weather conditions';
+  }
 } 

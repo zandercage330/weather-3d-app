@@ -1,16 +1,27 @@
 'use client';
 
-import { useTemperatureUnit } from './TemperatureUnitProvider';
 import { WeatherData, toCelsius } from '../lib/weatherService';
+import { UserPreferences } from '../hooks/useUserPreferences';
 import GlassCard from './GlassCard';
 
 export interface WeatherCardProps {
   weatherData: WeatherData | null;
   isLoading: boolean;
+  userPreferences?: UserPreferences;
 }
 
-export default function WeatherCard({ weatherData, isLoading }: WeatherCardProps) {
-  const { unit, toggleUnit } = useTemperatureUnit();
+export default function WeatherCard({ weatherData, isLoading, userPreferences }: WeatherCardProps) {
+  // If we don't have userPreferences, create defaults for backward compatibility
+  const preferences = userPreferences || {
+    temperatureUnit: 'F' as const,
+    showHumidity: true,
+    showWindSpeed: true,
+    showFeelsLike: true,
+    showPrecipitation: true,
+    defaultLocation: '',
+    theme: 'auto' as const,
+    savedLocations: []
+  };
   
   // Display loading skeleton while data is loading
   if (isLoading || !weatherData) {
@@ -31,13 +42,13 @@ export default function WeatherCard({ weatherData, isLoading }: WeatherCardProps
   }
   
   // Get the display temperature based on unit
-  const displayTemperature = unit === 'F' 
+  const displayTemperature = preferences.temperatureUnit === 'F' 
     ? weatherData.temperature 
     : toCelsius(weatherData.temperature);
     
   // Get the feels like temperature based on unit and calculation
   const feelsLikeTemp = calculateFeelsLikeTemp(weatherData);
-  const displayFeelsLike = unit === 'F' 
+  const displayFeelsLike = preferences.temperatureUnit === 'F' 
     ? feelsLikeTemp
     : toCelsius(feelsLikeTemp);
   
@@ -80,16 +91,10 @@ export default function WeatherCard({ weatherData, isLoading }: WeatherCardProps
     <GlassCard className="p-6" intensity="medium" variant="primary">
       <div className="flex justify-between items-start mb-6">
         <h2 className="text-2xl font-bold">{weatherData.location}</h2>
-        <button 
-          onClick={toggleUnit}
-          className="text-sm bg-blue-500 hover:bg-blue-600 text-white px-2 py-1 rounded transition-colors"
-        >
-          °{unit} → °{unit === 'F' ? 'C' : 'F'}
-        </button>
       </div>
       
       <div className="flex items-end mb-4">
-        <div className="text-5xl font-bold mr-2">{displayTemperature}°{unit}</div>
+        <div className="text-5xl font-bold mr-2">{displayTemperature}°{preferences.temperatureUnit}</div>
         <div className="text-3xl">{getWeatherIcon(weatherData.condition)}</div>
       </div>
       
@@ -97,10 +102,13 @@ export default function WeatherCard({ weatherData, isLoading }: WeatherCardProps
         {weatherData.condition.replace('-', ' ')}
       </div>
       
-      <div className="text-sm opacity-80">
-        <p>Feels like: {displayFeelsLike}°{unit}</p>
-        <p>Humidity: {weatherData.humidity}%</p>
-        <p>Wind: {weatherData.windSpeed} mph</p>
+      <div className="text-sm opacity-80 space-y-1">
+        {preferences.showFeelsLike && <p>Feels like: {displayFeelsLike}°{preferences.temperatureUnit}</p>}
+        {preferences.showHumidity && <p>Humidity: {weatherData.humidity}%</p>}
+        {preferences.showWindSpeed && <p>Wind: {weatherData.windSpeed} mph</p>}
+        {preferences.showPrecipitation && weatherData.precipitation !== undefined && (
+          <p>Precipitation: {weatherData.precipitation} mm</p>
+        )}
       </div>
       
       <div className="mt-4 pt-4 border-t border-white/10 text-sm opacity-60">

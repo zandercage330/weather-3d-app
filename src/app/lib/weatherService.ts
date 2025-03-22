@@ -1,6 +1,15 @@
 // This service handles weather data fetching and transformation
-// Using MCP weather tools for real data
+// Using WeatherAPI for real weather data
 
+import {
+  fetchCurrentWeather,
+  fetchForecast,
+  parseCurrentWeather,
+  parseForecast,
+  parseAlerts
+} from './weatherApiClient';
+
+// Continue using the existing MCP weather client as a fallback
 import { getCurrentWeatherFromMCP, getForecastFromMCP, getAlertsFromMCP } from './mcpWeatherClient';
 
 export interface WeatherData {
@@ -21,6 +30,24 @@ export interface ForecastDay {
   highTemp: number;
   lowTemp: number;
   precipitation: number;
+  humidity?: number;
+  windSpeed?: number;
+  windDirection?: string;
+  sunrise?: string;
+  sunset?: string;
+  description?: string;
+  uvIndex?: number;
+  hourlyForecast?: HourlyForecast[];
+}
+
+export interface HourlyForecast {
+  time: string;
+  temperature: number;
+  condition: string;
+  precipitation: number;
+  windSpeed?: number;
+  humidity?: number;
+  feelsLike?: number;
 }
 
 export interface WeatherAlert {
@@ -34,53 +61,135 @@ export interface WeatherAlert {
 
 /**
  * Gets weather data for the specified location
- * Uses MCP weather tools when available, falls back to simulation
+ * Uses real WeatherAPI data, falls back to MCP or simulation if needed
  */
 export async function getWeatherData(locationName: string = 'New York, NY'): Promise<WeatherData> {
   try {
-    // Get coordinates for the location
-    const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
-    
-    // Use MCP weather client to get weather data
-    return await getCurrentWeatherFromMCP(lat, lon, locationName);
+    // First attempt to use WeatherAPI
+    const weatherApiData = await fetchCurrentWeather(locationName);
+    return parseCurrentWeather(weatherApiData);
   } catch (error) {
-    console.error('Error getting weather data:', error);
-    return getFallbackWeatherData(locationName);
+    console.error('WeatherAPI fetch failed, trying fallback:', error);
+    
+    try {
+      // Fall back to MCP weather client if WeatherAPI fails
+      const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
+      return await getCurrentWeatherFromMCP(lat, lon, locationName);
+    } catch (mcpError) {
+      console.error('All weather services failed:', mcpError);
+      return getFallbackWeatherData(locationName);
+    }
   }
 }
 
 /**
  * Gets forecast data for the next several days
- * Uses MCP weather tools when available, falls back to simulation
+ * Uses real WeatherAPI data, falls back to MCP or simulation if needed
  */
 export async function getForecastData(days: number = 5, locationName: string = 'New York, NY'): Promise<ForecastDay[]> {
   try {
-    // Get coordinates for the location
-    const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
-    
-    // Use MCP weather client to get forecast data
-    const forecast = await getForecastFromMCP(lat, lon);
-    
-    // Limit to requested number of days
-    return forecast.slice(0, days);
+    // First attempt to use WeatherAPI
+    const forecastData = await fetchForecast(locationName, days);
+    return parseForecast(forecastData);
   } catch (error) {
-    console.error('Error getting forecast data:', error);
-    return getFallbackForecastData();
+    console.error('WeatherAPI forecast fetch failed, trying fallback:', error);
+    
+    try {
+      // Fall back to MCP weather client if WeatherAPI fails
+      const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
+      const forecast = await getForecastFromMCP(lat, lon);
+      
+      // Limit to requested number of days
+      return forecast.slice(0, days);
+    } catch (mcpError) {
+      console.error('All weather forecast services failed:', mcpError);
+      return getFallbackForecastData();
+    }
   }
 }
 
 /**
- * Gets weather alerts for a state
- * Uses MCP weather tools when available
+ * Gets weather alerts for a state or location
+ * Uses real WeatherAPI data when available
  */
 export async function getWeatherAlerts(stateCode: string = 'NY'): Promise<WeatherAlert[]> {
   try {
-    // Use MCP weather client to get alerts data
-    return await getAlertsFromMCP(stateCode);
+    // For WeatherAPI, we need a location (not just state code)
+    // We can use the state capital or major city as a representative location
+    const locationName = getLocationFromStateCode(stateCode);
+    
+    // First attempt to use WeatherAPI alerts
+    const forecastData = await fetchForecast(locationName, 1);
+    return parseAlerts(forecastData);
   } catch (error) {
-    console.error('Error getting weather alerts:', error);
-    return [];
+    console.error('WeatherAPI alerts fetch failed, trying fallback:', error);
+    
+    try {
+      // Fall back to MCP weather client
+      return await getAlertsFromMCP(stateCode);
+    } catch (mcpError) {
+      console.error('All weather alert services failed:', mcpError);
+      return [];
+    }
   }
+}
+
+// Helper to map state code to a representative location
+function getLocationFromStateCode(stateCode: string): string {
+  const stateMap: Record<string, string> = {
+    'AL': 'Birmingham, AL',
+    'AK': 'Anchorage, AK',
+    'AZ': 'Phoenix, AZ',
+    'AR': 'Little Rock, AR',
+    'CA': 'Sacramento, CA',
+    'CO': 'Denver, CO',
+    'CT': 'Hartford, CT',
+    'DE': 'Dover, DE',
+    'FL': 'Tallahassee, FL',
+    'GA': 'Atlanta, GA',
+    'HI': 'Honolulu, HI',
+    'ID': 'Boise, ID',
+    'IL': 'Springfield, IL',
+    'IN': 'Indianapolis, IN',
+    'IA': 'Des Moines, IA',
+    'KS': 'Topeka, KS',
+    'KY': 'Frankfort, KY',
+    'LA': 'Baton Rouge, LA',
+    'ME': 'Augusta, ME',
+    'MD': 'Annapolis, MD',
+    'MA': 'Boston, MA',
+    'MI': 'Lansing, MI',
+    'MN': 'Saint Paul, MN',
+    'MS': 'Jackson, MS',
+    'MO': 'Jefferson City, MO',
+    'MT': 'Helena, MT',
+    'NE': 'Lincoln, NE',
+    'NV': 'Carson City, NV',
+    'NH': 'Concord, NH',
+    'NJ': 'Trenton, NJ',
+    'NM': 'Santa Fe, NM',
+    'NY': 'Albany, NY',
+    'NC': 'Raleigh, NC',
+    'ND': 'Bismarck, ND',
+    'OH': 'Columbus, OH',
+    'OK': 'Oklahoma City, OK',
+    'OR': 'Salem, OR',
+    'PA': 'Harrisburg, PA',
+    'RI': 'Providence, RI',
+    'SC': 'Columbia, SC',
+    'SD': 'Pierre, SD',
+    'TN': 'Nashville, TN',
+    'TX': 'Austin, TX',
+    'UT': 'Salt Lake City, UT',
+    'VT': 'Montpelier, VT',
+    'VA': 'Richmond, VA',
+    'WA': 'Olympia, WA',
+    'WV': 'Charleston, WV',
+    'WI': 'Madison, WI',
+    'WY': 'Cheyenne, WY'
+  };
+  
+  return stateMap[stateCode] || `${stateCode}, USA`;
 }
 
 /**
@@ -125,8 +234,8 @@ function getCoordinatesForLocation(locationName: string): { lat: number, lon: nu
   return locationMap[locationName] || null;
 }
 
-// Fallback data in case of errors
-function getFallbackWeatherData(location: string = 'New York, NY'): WeatherData {
+// Generate fallback weather data when API calls fail
+export function getFallbackWeatherData(location: string = 'New York, NY'): WeatherData {
   return {
     temperature: 75,
     condition: 'partly-cloudy',
@@ -139,34 +248,94 @@ function getFallbackWeatherData(location: string = 'New York, NY'): WeatherData 
   };
 }
 
-function getFallbackForecastData(): ForecastDay[] {
+// Generate fallback forecast data
+export function getFallbackForecastData(): ForecastDay[] {
   const forecast: ForecastDay[] = [];
-  const conditions = ['clear', 'partly-cloudy', 'cloudy', 'rain', 'storm', 'snow'];
   const today = new Date();
-  const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const conditions = ['clear', 'partly-cloudy', 'cloudy', 'rain', 'storm'];
   
-  for (let i = 1; i <= 5; i++) {
-    const nextDate = new Date(today);
-    nextDate.setDate(today.getDate() + i);
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + i);
     
-    const dayName = daysOfWeek[nextDate.getDay()];
-    const dateString = nextDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
+    const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     
-    // Randomize weather conditions for demonstration
-    const randomCondition = conditions[Math.floor(Math.random() * conditions.length)];
-    const highTemp = Math.round(65 + Math.random() * 20); // Random temp between 65-85
-    const lowTemp = Math.round(highTemp - (5 + Math.random() * 15)); // Random temp 5-20 degrees lower
+    // For the random condition, pick from the conditions array
+    const condition = conditions[Math.floor(Math.random() * conditions.length)];
+    
+    // Generate random temperatures that make sense (higher high, lower low)
+    const highTemp = Math.round(Math.random() * 20) + 60; // 60-80°F
+    const lowTemp = highTemp - (Math.round(Math.random() * 15) + 5); // 5-20°F lower than high
+    
+    // Random precipitation chance
     const precipitation = Math.round(Math.random() * 100);
+    
+    // Generate hourly forecast data
+    const hourlyForecast: HourlyForecast[] = [];
+    for (let hour = 0; hour < 24; hour += 3) {
+      const hourTime = new Date(date);
+      hourTime.setHours(hour);
+      
+      // Temperature fluctuates throughout the day
+      const hourTemp = Math.round(
+        lowTemp + (highTemp - lowTemp) * (
+          hour < 12 
+            ? hour / 12 // Temperature rises until noon
+            : 1 - ((hour - 12) / 12) // Temperature falls after noon
+        )
+      );
+      
+      hourlyForecast.push({
+        time: hourTime.toLocaleTimeString('en-US', { hour: 'numeric', hour12: true }),
+        temperature: hourTemp,
+        condition: hour >= 6 && hour <= 18 ? condition : (condition === 'clear' ? 'clear' : 'cloudy'),
+        precipitation: Math.round(Math.random() * 100),
+        windSpeed: Math.round(Math.random() * 15) + 5,
+        humidity: Math.round(Math.random() * 40) + 40,
+        feelsLike: hourTemp - Math.round(Math.random() * 5)
+      });
+    }
     
     forecast.push({
       date: dateString,
       day: dayName,
-      condition: randomCondition,
+      condition,
       highTemp,
       lowTemp,
-      precipitation
+      precipitation,
+      humidity: Math.round(Math.random() * 40) + 40, // 40-80%
+      windSpeed: Math.round(Math.random() * 15) + 5, // 5-20 mph
+      windDirection: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.floor(Math.random() * 8)],
+      sunrise: '6:30 AM',
+      sunset: '7:45 PM',
+      description: getDescriptionFromCondition(condition),
+      uvIndex: Math.round(Math.random() * 10) + 1, // 1-11 UV index
+      hourlyForecast: hourlyForecast
     });
   }
   
   return forecast;
+}
+
+// Helper function to get description from condition
+function getDescriptionFromCondition(condition: string): string {
+  switch (condition) {
+    case 'clear':
+      return 'Clear sky with full sunshine';
+    case 'partly-cloudy':
+      return 'Partly cloudy with some sun';
+    case 'cloudy':
+      return 'Overcast with cloud cover';
+    case 'rain':
+      return 'Light to moderate rainfall';
+    case 'storm':
+      return 'Thunderstorms with lightning';
+    case 'snow':
+      return 'Snow showers';
+    case 'fog':
+      return 'Foggy conditions with reduced visibility';
+    default:
+      return 'Varying weather conditions';
+  }
 } 

@@ -1,33 +1,45 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --card-bg: rgba(255, 255, 255, 0.3);
-  --card-bg-hover: rgba(255, 255, 255, 0.4);
-  --card-border: rgba(255, 255, 255, 0.2);
-  --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  /* Default theme (dark) */
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 0, 0, 0;
+  --foreground-rgb: 255, 255, 255;
+  --card-bg-opacity: 0.2;
+  --card-border-opacity: 0.2;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Light theme */
+.light-theme {
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+  --foreground-rgb: 0, 0, 0;
+  --card-bg-opacity: 0.15;
+  --card-border-opacity: 0.1;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --card-bg: rgba(18, 18, 18, 0.4);
-    --card-bg-hover: rgba(28, 28, 28, 0.5);
-    --card-border: rgba(255, 255, 255, 0.1);
-    --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
-  }
+/* Dark theme (default) */
+.dark-theme {
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 0, 0, 0;
+  --foreground-rgb: 255, 255, 255;
+  --card-bg-opacity: 0.2;
+  --card-border-opacity: 0.2;
+}
+
+html {
+  height: 100%;
 }
 
 body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  min-height: 100vh;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
