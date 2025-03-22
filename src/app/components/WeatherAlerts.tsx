@@ -39,36 +39,16 @@ export default function WeatherAlerts({ stateCode }: WeatherAlertsProps) {
 
   if (isLoading) {
     return (
-      <GlassCard className="p-4 animate-pulse">
+      <GlassCard className="p-4 animate-pulse" intensity="medium" variant="warning">
         <div className="h-8 bg-white/20 rounded mb-4"></div>
         <div className="h-20 bg-white/20 rounded"></div>
       </GlassCard>
     );
   }
 
-  // Determine card variant based on alert severity
-  const getCardVariant = () => {
-    if (alerts.length === 0) return 'success';
-    
-    // Check for extreme alerts
-    const hasExtreme = alerts.some(alert => alert.severity === 'Extreme');
-    if (hasExtreme) return 'danger';
-    
-    // Check for severe alerts
-    const hasSevere = alerts.some(alert => alert.severity === 'Severe');
-    if (hasSevere) return 'warning';
-    
-    // Default for minor/moderate alerts
-    return 'info';
-  };
-
   if (alerts.length === 0) {
     return (
-      <GlassCard 
-        variant="success" 
-        intensity="light" 
-        className="p-4"
-      >
+      <GlassCard className="p-4" intensity="medium" variant="warning">
         <h3 className="text-xl font-semibold mb-2">Weather Alerts</h3>
         <p className="text-green-300">No active weather alerts for this area.</p>
       </GlassCard>
@@ -92,12 +72,7 @@ export default function WeatherAlerts({ stateCode }: WeatherAlertsProps) {
   };
 
   return (
-    <GlassCard 
-      variant={getCardVariant()} 
-      intensity="medium" 
-      className="p-4"
-      hoverEffect={false}
-    >
+    <GlassCard className="p-4" intensity="medium" variant="warning">
       <div className="flex justify-between items-center mb-2">
         <h3 className="text-xl font-semibold">Weather Alerts</h3>
         <button 

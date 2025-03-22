@@ -15,7 +15,7 @@ export default function WeatherCard({ weatherData, isLoading }: WeatherCardProps
   // Display loading skeleton while data is loading
   if (isLoading || !weatherData) {
     return (
-      <GlassCard className="p-6 animate-pulse">
+      <GlassCard className="p-6 animate-pulse" intensity="medium" variant="default">
         <div className="h-8 bg-white/20 rounded w-3/4 mb-6"></div>
         <div className="flex items-end mb-4">
           <div className="h-16 bg-white/20 rounded w-1/3 mr-2"></div>
@@ -76,33 +76,8 @@ export default function WeatherCard({ weatherData, isLoading }: WeatherCardProps
     }
   };
   
-  // Determine variant based on weather condition
-  const getCardVariant = () => {
-    switch (weatherData.condition) {
-      case 'clear':
-        return 'primary';
-      case 'partly-cloudy':
-      case 'cloudy':
-        return 'info';  
-      case 'rain':
-      case 'fog':
-        return 'default';
-      case 'storm':
-        return 'danger';
-      case 'snow':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-  
   return (
-    <GlassCard 
-      variant={getCardVariant()} 
-      intensity="medium" 
-      className="p-6"
-      hoverEffect={true}
-    >
+    <GlassCard className="p-6" intensity="medium" variant="primary">
       <div className="flex justify-between items-start mb-6">
         <h2 className="text-2xl font-bold">{weatherData.location}</h2>
         <button 

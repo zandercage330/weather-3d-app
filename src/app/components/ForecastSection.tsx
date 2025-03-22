@@ -15,7 +15,7 @@ export default function ForecastSection({ forecastData, isLoading }: ForecastSec
   // Display loading skeleton while data is loading
   if (isLoading) {
     return (
-      <GlassCard className="p-6 animate-pulse">
+      <GlassCard className="p-6 animate-pulse" intensity="medium" variant="info">
         <div className="h-8 bg-white/20 rounded w-1/3 mb-6"></div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[...Array(5)].map((_, i) => (
@@ -53,40 +53,17 @@ export default function ForecastSection({ forecastData, isLoading }: ForecastSec
     }
   };
 
-  // Determine card variant based on overall forecast conditions
-  const getCardVariant = () => {
-    // Count different conditions to determine dominant weather
-    const conditions = forecastData.map(day => day.condition);
-    const hasSevereWeather = conditions.some(condition => 
-      ['storm', 'snow'].includes(condition)
-    );
-    
-    if (hasSevereWeather) return 'warning';
-    
-    // Check if mostly clear
-    const clearCount = conditions.filter(c => c === 'clear').length;
-    if (clearCount >= Math.floor(conditions.length / 2)) return 'primary';
-    
-    // Default to info for regular forecasts
-    return 'info';
-  };
-
   return (
-    <GlassCard 
-      variant={getCardVariant()} 
-      intensity="medium" 
-      className="p-6"
-    >
+    <GlassCard className="p-6" intensity="medium" variant="info">
       <h3 className="text-xl font-bold mb-4">5-Day Forecast</h3>
       
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {forecastData.map((day, index) => (
           <GlassCard 
             key={index} 
-            className="p-3 text-center"
-            intensity="light"
+            className="p-3 text-center" 
+            intensity="light" 
             hoverEffect={true}
-            variant="default"
           >
             <div className="font-medium">{day.day}</div>
             <div className="text-sm opacity-70 mb-2">{day.date}</div>
