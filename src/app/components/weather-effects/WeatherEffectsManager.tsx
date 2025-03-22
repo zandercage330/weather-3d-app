@@ -1,216 +1,193 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
-import { WeatherData } from '../../lib/weatherService';
+import { useState, useEffect, useCallback } from 'react';
+import CloudEffect from './CloudEffect';
 import RainEffect from './RainEffect';
 import SnowEffect from './SnowEffect';
-import LightningEffect from './LightningEffect';
 import FogEffect from './FogEffect';
-import CloudEffect from './CloudEffect';
-import SunRaysEffect from './SunRaysEffect';
-import StarsEffect from './StarsEffect';
 
-// Weather effect intensity levels
 export type EffectIntensity = 'none' | 'low' | 'medium' | 'high';
 
-export interface WeatherEffectsProps {
-  weatherData: WeatherData | null;
+interface WeatherEffectsProps {
+  condition: string;
+  timeOfDay?: 'day' | 'night';
   intensity?: EffectIntensity;
   reducedMotion?: boolean;
 }
 
-/**
- * Manager component that coordinates weather effects based on current conditions
- * Controls which effects are active and their intensity
- */
 export default function WeatherEffectsManager({ 
-  weatherData, 
+  condition, 
+  timeOfDay = 'day',
   intensity = 'medium',
   reducedMotion = false
 }: WeatherEffectsProps) {
-  // Track if component is mounted to prevent memory leaks
-  const isMounted = useRef(true);
+  const [frameRate, setFrameRate] = useState<number | null>(null);
+  const [effectIntensity, setEffectIntensity] = useState<EffectIntensity>(intensity);
   
-  // Performance monitoring
-  const fpsRef = useRef(0);
-  const frameTimeRef = useRef(0);
-  const lastFrameTimeRef = useRef(0);
-  
-  // State for active effects
-  const [activeEffects, setActiveEffects] = useState<React.ReactNode[]>([]);
-  
-  // Determine which effects should be active based on weather conditions
-  useEffect(() => {
-    if (!weatherData || reducedMotion) {
-      setActiveEffects([]);
+  // Frame rate monitoring for performance adjustments
+  const monitorPerformance = useCallback(() => {
+    if (reducedMotion) {
+      setEffectIntensity('low');
       return;
     }
     
-    // Function to generate appropriate effects
-    const generateEffects = () => {
-      const { condition, precipitation = 0, windSpeed = 0, humidity = 50, temperature } = weatherData;
-      const effects: React.ReactNode[] = [];
+    let lastTime = performance.now();
+    let frames = 0;
+    let frameTimes: number[] = [];
+    
+    const countFrame = () => {
+      const now = performance.now();
+      const elapsed = now - lastTime;
       
-      // Calculate actual intensity based on device performance
-      const actualIntensity = calculateActualIntensity(intensity);
-      
-      switch (condition) {
-        case 'rain':
-          // Add rain effect with intensity based on precipitation
-          effects.push(
-            <RainEffect 
-              key="rain"
-              intensity={actualIntensity} 
-              precipitation={precipitation}
-              windSpeed={windSpeed}
-            />
-          );
-          break;
+      // Only count frames after first call
+      if (frames > 0) {
+        frameTimes.push(elapsed);
+        
+        // Calculate average after collecting 10 frames
+        if (frameTimes.length >= 10) {
+          const average = frameTimes.reduce((sum, time) => sum + time, 0) / frameTimes.length;
+          const fps = 1000 / average;
+          setFrameRate(Math.round(fps));
           
-        case 'snow':
-          // Add snow effect with intensity based on precipitation
-          effects.push(
-            <SnowEffect 
-              key="snow"
-              intensity={actualIntensity} 
-              precipitation={precipitation}
-              windSpeed={windSpeed}
-              temperature={temperature}
-            />
-          );
-          break;
-          
-        case 'storm':
-          // Add rain and lightning effects
-          effects.push(
-            <RainEffect 
-              key="rain"
-              intensity={actualIntensity} 
-              precipitation={precipitation > 30 ? precipitation : 30} // Ensure some rain with storms
-              windSpeed={windSpeed}
-            />
-          );
-          effects.push(
-            <LightningEffect 
-              key="lightning"
-              intensity={actualIntensity} 
-            />
-          );
-          break;
-          
-        case 'fog':
-          // Add fog effect with intensity based on humidity
-          effects.push(
-            <FogEffect 
-              key="fog"
-              intensity={actualIntensity} 
-              density={humidity}
-            />
-          );
-          break;
-          
-        case 'cloudy':
-        case 'partly-cloudy':
-          // Add cloud effect with number based on condition
-          effects.push(
-            <CloudEffect 
-              key="cloud"
-              intensity={actualIntensity} 
-              coverage={condition === 'cloudy' ? 80 : 40}
-            />
-          );
-          break;
-          
-        case 'clear':
-          // Add sun rays or stars effect based on time of day
-          if (weatherData.timeOfDay === 'day') {
-            effects.push(
-              <SunRaysEffect 
-                key="sunrays"
-                intensity={actualIntensity} 
-              />
-            );
+          // Adjust effect intensity based on frame rate
+          if (fps < 30) {
+            setEffectIntensity('low');
+          } else if (fps < 50) {
+            setEffectIntensity('medium');
           } else {
-            effects.push(
-              <StarsEffect 
-                key="stars"
-                intensity={actualIntensity} 
-              />
-            );
+            setEffectIntensity(intensity);
           }
-          break;
+          
+          // Reset for next cycle
+          frameTimes = [];
+        }
       }
       
-      return effects;
+      frames++;
+      lastTime = now;
+      
+      if (frames < 100) { // Only monitor for a short time
+        requestAnimationFrame(countFrame);
+      }
     };
     
-    setActiveEffects(generateEffects());
-    
-    // Start monitoring performance
-    startPerformanceMonitoring();
-    
-    return () => {
-      stopPerformanceMonitoring();
-    };
-  }, [weatherData, intensity, reducedMotion]);
+    requestAnimationFrame(countFrame);
+  }, [intensity, reducedMotion]);
   
-  // Effect to clean up on unmount
+  // Start monitoring performance when component mounts
   useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
-  
-  // Performance monitoring functions
-  const startPerformanceMonitoring = () => {
-    lastFrameTimeRef.current = performance.now();
-    requestAnimationFrame(monitorPerformance);
-  };
-  
-  const stopPerformanceMonitoring = () => {
-    // No need to cancel animation frame as we check isMounted
-  };
-  
-  const monitorPerformance = (timestamp: number) => {
-    if (!isMounted.current) return;
+    if (!reducedMotion) {
+      monitorPerformance();
+    }
+  }, [monitorPerformance, reducedMotion]);
+
+  // Generate effects based on weather condition
+  const generateEffects = () => {
+    const isDark = timeOfDay === 'night';
+    const baseIntensity = reducedMotion ? 'low' : effectIntensity;
     
-    // Calculate frame time and FPS
-    const frameTime = timestamp - lastFrameTimeRef.current;
-    frameTimeRef.current = frameTime;
-    fpsRef.current = 1000 / frameTime;
+    // Default values for weather effects
+    let clouds: EffectIntensity = 'none';
+    let rain: EffectIntensity = 'none';
+    let snow: EffectIntensity = 'none';
+    let fog: EffectIntensity = 'none';
+    let isHeavyRain = false;
     
-    lastFrameTimeRef.current = timestamp;
-    
-    // Continue monitoring
-    requestAnimationFrame(monitorPerformance);
-  };
-  
-  // Calculate appropriate intensity based on device performance
-  const calculateActualIntensity = (requestedIntensity: EffectIntensity): EffectIntensity => {
-    if (requestedIntensity === 'none') return 'none';
-    
-    const fps = fpsRef.current;
-    
-    // If FPS is too low, reduce intensity
-    if (fps > 0 && fps < 30) {
-      // Significantly reduce intensity
-      if (requestedIntensity === 'high') return 'medium';
-      if (requestedIntensity === 'medium') return 'low';
-      return 'none';
-    } else if (fps > 0 && fps < 45) {
-      // Slightly reduce intensity
-      if (requestedIntensity === 'high') return 'medium';
-      return requestedIntensity;
+    // Set effect intensities based on condition
+    switch (condition?.toLowerCase()) {
+      case 'clear':
+        clouds = 'low';
+        break;
+        
+      case 'partly-cloudy':
+        clouds = 'medium';
+        break;
+        
+      case 'cloudy':
+        clouds = 'high';
+        break;
+        
+      case 'fog':
+        clouds = 'medium';
+        fog = baseIntensity;
+        break;
+        
+      case 'rain':
+        clouds = 'high';
+        rain = baseIntensity;
+        break;
+        
+      case 'heavy-rain':
+      case 'thunderstorm':
+      case 'storm':
+        clouds = 'high';
+        rain = 'high';
+        isHeavyRain = true;
+        break;
+        
+      case 'snow':
+        clouds = 'medium';
+        snow = baseIntensity;
+        break;
+        
+      case 'blizzard':
+      case 'heavy-snow':
+        clouds = 'high';
+        snow = 'high';
+        fog = 'low';
+        break;
+        
+      case 'sleet':
+      case 'mixed':
+        clouds = 'high';
+        rain = 'low';
+        snow = 'low';
+        break;
+        
+      default:
+        // Default to partly cloudy if condition not recognized
+        clouds = 'medium';
     }
     
-    // Default: use requested intensity
-    return requestedIntensity;
+    return (
+      <>
+        <CloudEffect 
+          intensity={clouds} 
+          coverage={clouds === 'high' ? 90 : clouds === 'medium' ? 60 : 30}
+          dark={isDark || ['storm', 'thunderstorm', 'heavy-rain'].includes(condition?.toLowerCase() || '')} 
+        />
+        
+        {rain !== 'none' && (
+          <RainEffect 
+            intensity={rain} 
+            precipitation={rain === 'high' ? 90 : 50} 
+            windSpeed={10} 
+            heavy={isHeavyRain}
+          />
+        )}
+        
+        {snow !== 'none' && (
+          <SnowEffect 
+            intensity={snow} 
+            precipitation={snow === 'high' ? 90 : 50} 
+            windSpeed={5} 
+            temperature={25}
+          />
+        )}
+        
+        {fog !== 'none' && (
+          <FogEffect 
+            intensity={fog} 
+            density={fog === 'high' ? 90 : 60} 
+          />
+        )}
+      </>
+    );
   };
-  
-  // Render active effects
+
   return (
-    <div className="weather-effects-container absolute inset-0 pointer-events-none overflow-hidden">
-      {activeEffects}
+    <div className="weather-effects">
+      {generateEffects()}
     </div>
   );
 } 

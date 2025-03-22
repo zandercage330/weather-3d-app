@@ -96,3 +96,44 @@ The weather map includes:
 5. Zoom and pan the map to explore different areas
 
 The radar data updates automatically every 10 minutes to ensure you have the latest precipitation information.
+
+## Smart Notification System
+
+The application includes a comprehensive notification system that keeps you informed about important weather events without overwhelming you. 
+
+### Features
+
+- **Real-time Weather Alerts**: Get immediate notifications for severe weather events
+- **Personalized Notifications**: Configure exactly which types of notifications you want to receive
+- **Scheduled Notifications**: Create custom notification schedules for regular weather updates
+- **Notification History**: View past notifications and track weather patterns
+- **Smart Rules**: Set up custom rules for notifications based on specific weather conditions
+- **Browser Notifications**: Receive alerts even when the app is not in focus
+
+### Notification Types
+
+- **Weather Alerts**: Government-issued severe weather warnings
+- **Forecast Updates**: Daily summaries of upcoming weather
+- **Precipitation Alerts**: Get notified when rain or snow is about to start or stop
+- **Temperature Alerts**: Notifications for significant temperature changes
+- **Air Quality Alerts**: Get informed when air quality reaches unhealthy levels
+- **UV Index Warnings**: Warnings when UV levels are high enough to cause skin damage
+
+### Customization Options
+
+The notification system offers extensive customization:
+
+- **Thresholds**: Adjust sensitivity for temperature changes, precipitation probabilities, etc.
+- **Quiet Hours**: Set times when non-critical notifications are silenced
+- **Frequency Controls**: Choose how often you receive notifications
+- **Weekend Preferences**: Decide if you want to receive non-critical notifications on weekends
+
+### How to Use
+
+1. Click the bell icon in the top right corner to open the notification panel
+2. Switch between tabs to see your active notifications, history, or scheduled notifications
+3. Use the "Schedule" tab to create new notification schedules
+4. Configure your preferences in detail using the "Settings" tab
+5. Enable browser notifications when prompted to receive alerts outside the app
+
+The notification system is designed to be unobtrusive while keeping you informed about the weather conditions that matter most to you.

@@ -1,193 +1,179 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useUserPreferences, UserPreferencesProvider } from './hooks/useUserPreferences';
+import { useLocationSearch } from './hooks/useLocationSearch';
+import { getWeatherData, getForecastData, getWeatherAlerts, WeatherData, ForecastDay, WeatherAlert } from './lib/weatherService';
+import { NotificationProvider } from './hooks/useNotifications';
+import { useNotifications } from './hooks/useNotifications';
+import { generateWeatherNotifications } from './lib/notificationService';
 import WeatherCard from './components/WeatherCard';
-import ForecastSection from './components/ForecastSection';
-import LocationSelector from './components/LocationSelector';
-import RefreshButton from './components/RefreshButton';
-import WeatherAlerts from './components/WeatherAlerts';
+import WeatherForecast from './components/WeatherForecast';
 import WeatherBackground from './components/WeatherBackground';
-import ApiTester from './components/ApiTester';
+import LocationSearch from './components/LocationSearch';
+import WeatherAlerts from './components/WeatherAlerts';
+import AirQualityIndicator from './components/AirQualityIndicator';
+import NotificationButton from './components/NotificationButton';
 import SettingsButton from './components/SettingsButton';
-import ThemeProvider from './components/ThemeProvider';
-import AirQualityCard from './components/AirQualityCard';
-import UVIndexCard from './components/UVIndexCard';
-import ActivityRecommendations from './components/ActivityRecommendations';
-import { UserPreferencesProvider, useUserPreferences } from './hooks/useUserPreferences';
-import { getWeatherData, getForecastData, WeatherData, ForecastDay } from './lib/weatherService';
-import dynamic from 'next/dynamic';
+import Logo from './components/Logo';
 
-// Dynamically import the WeatherMapView component to avoid SSR issues with Leaflet
-const WeatherMapView = dynamic(() => import('./components/WeatherMapView'), { 
-  ssr: false,
-  loading: () => <div className="h-[500px] w-full bg-gray-800/50 rounded-lg flex items-center justify-center">Loading map...</div>
-});
+function HomePage() {
+  const { preferences, updatePreference } = useUserPreferences();
+  const { notificationPreferences, addNotifications } = useNotifications();
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [forecastData, setForecastData] = useState<ForecastDay[]>([]);
+  const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { searchTerm, searchResults, isSearching, handleSearch, handleResultSelect, clearSearch } = useLocationSearch();
 
-// Wrap the main content in the providers
-export default function Home() {
+  // Fetch weather data based on the location in preferences
+  useEffect(() => {
+    async function loadWeatherData() {
+      if (!preferences.defaultLocation) return;
+      
+      setIsLoading(true);
+      try {
+        const [weather, forecast, alertsData] = await Promise.all([
+          getWeatherData(preferences.defaultLocation),
+          getForecastData(7, preferences.defaultLocation), // Increased to 7 days for better forecasting
+          getWeatherAlerts(preferences.defaultLocation.split(',')[1]?.trim() || 'NY')
+        ]);
+        
+        setWeatherData(weather);
+        setForecastData(forecast);
+        setAlerts(alertsData);
+      } catch (error) {
+        console.error('Error fetching weather data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadWeatherData();
+    
+    // Set up a periodic refresh for weather data
+    const refreshInterval = setInterval(loadWeatherData, 15 * 60 * 1000); // Refresh every 15 minutes
+    
+    return () => clearInterval(refreshInterval);
+  }, [preferences.defaultLocation]);
+  
+  // Generate notifications when weather data changes
+  useEffect(() => {
+    // Only proceed if we have all the required data and notifications are enabled
+    if (weatherData && forecastData.length > 0 && notificationPreferences.enabled) {
+      const newNotifications = generateWeatherNotifications(
+        weatherData,
+        forecastData,
+        alerts,
+        notificationPreferences
+      );
+      
+      if (newNotifications.length > 0) {
+        addNotifications(newNotifications);
+      }
+    }
+  }, [weatherData, forecastData, alerts, notificationPreferences, addNotifications]);
+  
+  // Set up periodic notification check for background notification generation
+  useEffect(() => {
+    // Function to check for scheduled notifications and other time-based events
+    const checkForScheduledNotifications = async () => {
+      if (!weatherData || !notificationPreferences.enabled) return;
+      
+      // This will check scheduled notifications and generate any that are due
+      const newNotifications = generateWeatherNotifications(
+        weatherData,
+        forecastData,
+        alerts,
+        notificationPreferences
+      );
+      
+      if (newNotifications.length > 0) {
+        addNotifications(newNotifications);
+      }
+    };
+    
+    // Run immediately on mount
+    checkForScheduledNotifications();
+    
+    // Set up interval to run every minute
+    const notificationInterval = setInterval(checkForScheduledNotifications, 60 * 1000);
+    
+    return () => clearInterval(notificationInterval);
+  }, [weatherData, forecastData, alerts, notificationPreferences, addNotifications]);
+
   return (
-    <UserPreferencesProvider>
-      <ThemeProvider>
-        <HomeContent />
-      </ThemeProvider>
-    </UserPreferencesProvider>
+    <NotificationProvider>
+      <WeatherBackground 
+        condition={weatherData?.condition || 'clear'} 
+        timeOfDay={weatherData?.timeOfDay || 'day'}
+      >
+        <div className="flex flex-col h-screen max-h-screen overflow-hidden p-4">
+          {/* Header section */}
+          <header className="flex justify-between items-center mb-6">
+            <Logo />
+            <div className="flex space-x-3">
+              <NotificationButton />
+              <SettingsButton 
+                onClick={() => setIsSettingsOpen(true)} 
+                isOpen={isSettingsOpen} 
+                onClose={() => setIsSettingsOpen(false)} 
+              />
+            </div>
+          </header>
+
+          {/* Location search */}
+          <div className="mb-6 relative z-10">
+            <LocationSearch
+              searchTerm={searchTerm}
+              searchResults={searchResults}
+              isSearching={isSearching}
+              onSearch={handleSearch}
+              onResultSelect={handleResultSelect}
+              onClearSearch={clearSearch}
+            />
+          </div>
+
+          {/* Main weather content */}
+          <div className="flex-1 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 overflow-y-auto pb-4">
+            <div className="space-y-4 md:col-span-1 lg:col-span-2">
+              <WeatherCard 
+                weatherData={weatherData}
+                isLoading={isLoading}
+                userPreferences={preferences} 
+              />
+              
+              {weatherData?.airQuality && (
+                <AirQualityIndicator airQuality={weatherData.airQuality} />
+              )}
+              
+              {alerts.length > 0 && (
+                <WeatherAlerts alerts={alerts} />
+              )}
+            </div>
+            
+            <div className="md:col-span-1 order-first md:order-none">
+              <WeatherForecast 
+                forecastData={forecastData}
+                isLoading={isLoading}
+                userPreferences={preferences}
+              />
+            </div>
+          </div>
+        </div>
+      </WeatherBackground>
+    </NotificationProvider>
   );
 }
 
-// Main content component that uses the preferences
-function HomeContent() {
-  const { preferences, updatePreference, addSavedLocation } = useUserPreferences();
-  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
-  const [forecastData, setForecastData] = useState<ForecastDay[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<string>(preferences.defaultLocation);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showApiTester, setShowApiTester] = useState(false);
-  const [showWeatherMap, setShowWeatherMap] = useState(false);
-  const [showAdvancedFeatures, setShowAdvancedFeatures] = useState(false);
-  
-  // When defaultLocation changes in preferences, update selectedLocation
-  useEffect(() => {
-    setSelectedLocation(preferences.defaultLocation);
-  }, [preferences.defaultLocation]);
-  
-  // Extract state code from location string for weather alerts
-  const getStateCode = (location: string): string => {
-    const match = location.match(/,\s*([A-Z]{2})$/);
-    return match ? match[1] : 'NY'; // Default to NY if no state code found
-  };
-
-  const fetchWeatherData = async () => {
-    setIsLoading(true);
-    try {
-      const [weather, forecast] = await Promise.all([
-        getWeatherData(selectedLocation),
-        getForecastData(7, selectedLocation)
-      ]);
-      setWeatherData(weather);
-      setForecastData(forecast);
-    } catch (error) {
-      console.error('Error fetching weather data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Fetch weather data on initial load and when location changes
-  useEffect(() => {
-    fetchWeatherData();
-  }, [selectedLocation]);
-
-  const handleLocationChange = (newLocation: string) => {
-    setSelectedLocation(newLocation);
-    // Automatically save this location to preferences
-    addSavedLocation(newLocation);
-  };
-
+// Wrapper component that provides context
+export default function Home() {
   return (
-    <WeatherBackground weatherData={weatherData}>
-      <main className="flex min-h-screen flex-col items-center p-4 md:p-8 lg:p-12 text-white">
-        <div className="w-full max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-4">
-            <h1 className="text-3xl md:text-4xl font-bold">Weather App</h1>
-            <div className="flex items-center gap-4">
-              <LocationSelector 
-                currentLocation={selectedLocation} 
-                onLocationChange={handleLocationChange} 
-                savedLocations={preferences.savedLocations} 
-              />
-              <RefreshButton onClick={fetchWeatherData} isLoading={isLoading} />
-              <SettingsButton />
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setShowApiTester(!showApiTester)}
-                  className="text-xs text-white/60 hover:text-white"
-                >
-                  {showApiTester ? 'Hide' : 'Show'} API Tester
-                </button>
-                <span className="text-white/30">|</span>
-                <button 
-                  onClick={() => setShowWeatherMap(!showWeatherMap)}
-                  className="text-xs text-white/60 hover:text-white"
-                >
-                  {showWeatherMap ? 'Hide' : 'Show'} Radar Map
-                </button>
-                <span className="text-white/30">|</span>
-                <button
-                  onClick={() => setShowAdvancedFeatures(!showAdvancedFeatures)}
-                  className="text-xs text-white/60 hover:text-white"
-                >
-                  {showAdvancedFeatures ? 'Hide' : 'Show'} Advanced Features
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {showApiTester && (
-            <div className="mb-6">
-              <ApiTester />
-            </div>
-          )}
-          
-          {showWeatherMap && (
-            <div className="mb-6">
-              <div className="bg-black/30 backdrop-blur-sm p-4 rounded-lg">
-                <WeatherMapView />
-              </div>
-            </div>
-          )}
-
-          {/* Main content grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main weather card and alerts in first column */}
-            <div className="lg:col-span-1 space-y-6">
-              <WeatherCard 
-                weatherData={weatherData} 
-                isLoading={isLoading} 
-                userPreferences={preferences}
-              />
-              
-              {weatherData && weatherData.uvIndex && showAdvancedFeatures && (
-                <UVIndexCard 
-                  uvIndex={weatherData.uvIndex} 
-                />
-              )}
-              
-              {weatherData && weatherData.airQuality && showAdvancedFeatures && (
-                <AirQualityCard 
-                  airQuality={weatherData.airQuality} 
-                />
-              )}
-              
-              <WeatherAlerts 
-                stateCode={getStateCode(selectedLocation)} 
-              />
-            </div>
-            
-            {/* Forecast section spans two columns on large screens */}
-            <div className="lg:col-span-2">
-              <ForecastSection 
-                forecastData={forecastData} 
-                isLoading={isLoading} 
-                userPreferences={preferences}
-              />
-              
-              {weatherData && forecastData.length > 0 && showAdvancedFeatures && (
-                <div className="mt-6">
-                  <ActivityRecommendations 
-                    weatherData={weatherData} 
-                    forecast={forecastData} 
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <footer className="mt-8 text-center text-sm text-white/60">
-            <p>Real-time weather data powered by WeatherAPI</p>
-            <p className="mt-1">© {new Date().getFullYear()} Weather App</p>
-          </footer>
-        </div>
-      </main>
-    </WeatherBackground>
+    <UserPreferencesProvider>
+      <NotificationProvider>
+        <HomePage />
+      </NotificationProvider>
+    </UserPreferencesProvider>
   );
 } 

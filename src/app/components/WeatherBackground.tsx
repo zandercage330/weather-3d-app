@@ -1,19 +1,19 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { WeatherData } from '../lib/weatherService';
 import WeatherEffectsManager from './weather-effects/WeatherEffectsManager';
 
 export interface WeatherBackgroundProps {
-  weatherData: WeatherData | null;
-  children: React.ReactNode;
+  condition: string;
+  timeOfDay: 'day' | 'night';
+  children?: React.ReactNode;
 }
 
 /**
  * Dynamic weather background component that changes based on current conditions and time of day
  * Creates atmospheric effects appropriate for the current weather
  */
-export default function WeatherBackground({ weatherData, children }: WeatherBackgroundProps) {
+export default function WeatherBackground({ condition, timeOfDay, children }: WeatherBackgroundProps) {
   // State for user preferences
   const [reducedMotion, setReducedMotion] = useState(false);
   const [effectIntensity, setEffectIntensity] = useState<'none' | 'low' | 'medium' | 'high'>('medium');
@@ -36,104 +36,79 @@ export default function WeatherBackground({ weatherData, children }: WeatherBack
       mediaQuery.removeEventListener('change', handleMotionPreferenceChange);
     };
   }, []);
-
-  // Get background gradient based on weather and time
-  const backgroundStyle = getBackgroundStyle(weatherData);
+  
+  // Get appropriate background style and effects based on weather condition and time of day
+  const backgroundStyle = getBackgroundStyle(condition, timeOfDay);
   
   return (
     <div 
-      className="min-h-screen w-full relative overflow-hidden transition-all duration-1000 ease-in-out"
+      className="absolute inset-0 overflow-hidden"
       style={backgroundStyle}
-      aria-label={weatherData ? `Weather background: ${weatherData.condition} during ${weatherData?.timeOfDay || 'day'}` : 'Loading weather background'}
     >
-      {/* Weather effects */}
-      <WeatherEffectsManager 
-        weatherData={weatherData}
-        intensity={effectIntensity}
-        reducedMotion={reducedMotion}
-      />
+      {/* Weather effects layer (rain, snow, etc.) */}
+      {!reducedMotion && effectIntensity !== 'none' && (
+        <WeatherEffectsManager 
+          condition={condition}
+          timeOfDay={timeOfDay}
+          intensity={effectIntensity}
+        />
+      )}
       
-      {/* Content */}
-      <div className="relative z-10">
-        {children}
-      </div>
+      {/* Gradient overlay for better text readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/70 pointer-events-none" />
+      
+      {children}
     </div>
   );
 }
 
 /**
- * Generates the appropriate background style based on weather conditions and time of day
+ * Get the appropriate background style based on weather condition and time of day
  */
-function getBackgroundStyle(weatherData: WeatherData | null): React.CSSProperties {
-  if (!weatherData) {
-    // Default loading state - blue gradient
-    return {
-      background: 'linear-gradient(to bottom, #1e3c72, #2a5298)'
-    };
+function getBackgroundStyle(condition: string, timeOfDay: 'day' | 'night'): React.CSSProperties {
+  // Normalize the condition to lowercase and remove spaces
+  const normalizedCondition = condition.toLowerCase().replace(/\s+/g, '');
+  
+  // Base gradients for different times of day
+  const dayGradient = 'linear-gradient(to bottom, #4B91F7, #98CBFF)';
+  const nightGradient = 'linear-gradient(to bottom, #0F2043, #274577)';
+  
+  // Base colors for different weather conditions
+  const clearDayGradient = 'linear-gradient(to bottom, #4B91F7, #98CBFF)';
+  const clearNightGradient = 'linear-gradient(to bottom, #0F2043, #274577)';
+  const cloudyDayGradient = 'linear-gradient(to bottom, #8FA9C0, #BCCFDE)';
+  const cloudyNightGradient = 'linear-gradient(to bottom, #252F3D, #414C5E)';
+  const rainyDayGradient = 'linear-gradient(to bottom, #576574, #8395A7)';
+  const rainyNightGradient = 'linear-gradient(to bottom, #1E272E, #485460)';
+  const snowyDayGradient = 'linear-gradient(to bottom, #C8D6E5, #F0F4F8)';
+  const snowyNightGradient = 'linear-gradient(to bottom, #606C7A, #8395A7)';
+  const stormyDayGradient = 'linear-gradient(to bottom, #2C3A47, #4B6584)';
+  const stormyNightGradient = 'linear-gradient(to bottom, #151D26, #2C3A47)';
+  const foggyDayGradient = 'linear-gradient(to bottom, #A5B1C2, #D1D8E0)';
+  const foggyNightGradient = 'linear-gradient(to bottom, #4B6584, #718093)';
+  
+  // Map condition to gradient
+  let backgroundImage;
+  
+  if (normalizedCondition.includes('clear') || normalizedCondition.includes('sunny')) {
+    backgroundImage = timeOfDay === 'day' ? clearDayGradient : clearNightGradient;
+  } else if (normalizedCondition.includes('cloud') || normalizedCondition.includes('overcast') || normalizedCondition.includes('partly')) {
+    backgroundImage = timeOfDay === 'day' ? cloudyDayGradient : cloudyNightGradient;
+  } else if (normalizedCondition.includes('rain') || normalizedCondition.includes('drizzle') || normalizedCondition.includes('shower')) {
+    backgroundImage = timeOfDay === 'day' ? rainyDayGradient : rainyNightGradient;
+  } else if (normalizedCondition.includes('snow') || normalizedCondition.includes('sleet') || normalizedCondition.includes('ice')) {
+    backgroundImage = timeOfDay === 'day' ? snowyDayGradient : snowyNightGradient;
+  } else if (normalizedCondition.includes('thunder') || normalizedCondition.includes('storm') || normalizedCondition.includes('lightning')) {
+    backgroundImage = timeOfDay === 'day' ? stormyDayGradient : stormyNightGradient;
+  } else if (normalizedCondition.includes('fog') || normalizedCondition.includes('mist') || normalizedCondition.includes('haz')) {
+    backgroundImage = timeOfDay === 'day' ? foggyDayGradient : foggyNightGradient;
+  } else {
+    // Default fallback based on time of day
+    backgroundImage = timeOfDay === 'day' ? dayGradient : nightGradient;
   }
-
-  const { condition, timeOfDay = 'day' } = weatherData;
   
-  // Background styles mapped to weather conditions and time of day
-  const backgroundStyles: Record<string, React.CSSProperties> = {
-    // Clear day/night backgrounds
-    'clear-day': {
-      background: 'linear-gradient(to bottom, #4facfe, #00f2fe)'
-    },
-    'clear-night': {
-      background: 'linear-gradient(to bottom, #0f2027, #203a43, #2c5364)'
-    },
-    
-    // Cloudy variations
-    'partly-cloudy-day': {
-      background: 'linear-gradient(to bottom, #6a85b6, #bac8e0)'
-    },
-    'partly-cloudy-night': {
-      background: 'linear-gradient(to bottom, #30445c, #5b6976)'
-    },
-    'cloudy-day': {
-      background: 'linear-gradient(to bottom, #8e9eab, #eef2f3)'
-    },
-    'cloudy-night': {
-      background: 'linear-gradient(to bottom, #373b44, #4286f4)'
-    },
-    
-    // Rain variations
-    'rain-day': {
-      background: 'linear-gradient(to bottom, #616161, #9bc5c3)'
-    },
-    'rain-night': {
-      background: 'linear-gradient(to bottom, #232526, #414345)'
-    },
-    
-    // Storm variations
-    'storm-day': {
-      background: 'linear-gradient(to bottom, #372f6a, #7474bf)'
-    },
-    'storm-night': {
-      background: 'linear-gradient(to bottom, #0f0c29, #302b63, #24243e)'
-    },
-    
-    // Snow variations
-    'snow-day': {
-      background: 'linear-gradient(to bottom, #e6dada, #274046)'
-    },
-    'snow-night': {
-      background: 'linear-gradient(to bottom, #2c3e50, #3498db)'
-    },
-    
-    // Fog variations
-    'fog-day': {
-      background: 'linear-gradient(to bottom, #bdc3c7, #2c3e50)'
-    },
-    'fog-night': {
-      background: 'linear-gradient(to bottom, #4b6cb7, #182848)'
-    }
+  return {
+    backgroundImage,
+    transition: 'background-image 1s ease-in-out',
   };
-  
-  // Create a key from condition and time of day
-  const styleKey = `${condition}-${timeOfDay}`;
-  
-  // Return the appropriate style or a default one
-  return backgroundStyles[styleKey] || backgroundStyles[`partly-cloudy-${timeOfDay}`];
 } 

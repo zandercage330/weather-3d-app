@@ -7,6 +7,7 @@ interface RainEffectProps {
   intensity: EffectIntensity;
   precipitation: number; // 0-100 value
   windSpeed: number; // in mph
+  heavy?: boolean; // Whether this is heavy rain (affects raindrop size and sound)
 }
 
 interface Raindrop {
@@ -25,7 +26,8 @@ interface Raindrop {
 export default function RainEffect({ 
   intensity = 'medium', 
   precipitation = 50,
-  windSpeed = 0 
+  windSpeed = 0,
+  heavy = false
 }: RainEffectProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const raindropsRef = useRef<Raindrop[]>([]);
@@ -42,92 +44,101 @@ export default function RainEffect({
       'none': 0
     }[intensity] || 0;
     
-    // Scale count based on precipitation percentage
-    return Math.floor(baseCount * (precipitation / 50));
+    // Adjust for precipitation and heavy rain
+    const precipitationFactor = precipitation / 50;
+    const heavyFactor = heavy ? 1.5 : 1;
+    return Math.floor(baseCount * precipitationFactor * heavyFactor);
   };
-
-  // Calculate wind influence (-10 to 10 degrees of slant)
+  
+  // Calculate wind influence on raindrop angle
   const getWindFactor = (): number => {
-    // Cap at max of 10 degree slant
-    const maxWindFactor = 10;
-    return Math.min(windSpeed / 2, maxWindFactor) * (Math.random() > 0.5 ? 1 : -1);
+    // Convert wind speed to a reasonable angle factor
+    // 20mph wind would result in about a 30 degree angle
+    return (windSpeed / 20) * 0.5;
   };
-
-  // Initialize raindrops with varying properties
+  
+  // Initialize the raindrops array
   const initRaindrops = () => {
-    if (!canvasRef.current) return;
-    
     const count = getDropCount();
     const drops: Raindrop[] = [];
     
     for (let i = 0; i < count; i++) {
-      drops.push(createRaindrop());
+      drops.push(createRaindrop(false));
     }
     
     raindropsRef.current = drops;
   };
-
-  // Create a single raindrop with random properties
+  
+  // Create a new raindrop with randomized properties
   const createRaindrop = (isReset: boolean = false): Raindrop => {
-    const speed = 10 + Math.random() * 10; // Falling speed
-    const length = 10 + Math.random() * 20; // Length of drop
-    const thickness = 1 + Math.random() * 2; // Thickness of drop
+    const heavyFactor = heavy ? 1.5 : 1;
     
     return {
-      x: Math.random() * canvasWidth.current,
-      y: isReset ? -length : Math.random() * canvasHeight.current,
-      length,
-      speed,
-      thickness,
-      opacity: 0.1 + Math.random() * 0.4
+      x: isReset ? Math.random() * canvasWidth.current : Math.random() * canvasWidth.current,
+      y: isReset ? -20 : Math.random() * canvasHeight.current,
+      length: (Math.random() * 10 + 10) * heavyFactor, // 10-20px (or 15-30px if heavy)
+      speed: (Math.random() * 10 + 15) * (intensity === 'high' ? 1.5 : 1) * heavyFactor,
+      thickness: (Math.random() + 1) * heavyFactor,
+      opacity: Math.random() * 0.2 + 0.8 // 0.8-1.0 opacity
     };
   };
-
-  // Draw all raindrops on canvas
+  
+  // Draw the raindrops on the canvas
   const drawRain = (ctx: CanvasRenderingContext2D) => {
+    const windFactor = getWindFactor();
+    
     ctx.clearRect(0, 0, canvasWidth.current, canvasHeight.current);
+    ctx.strokeStyle = heavy ? 'rgba(180, 200, 225, 0.9)' : 'rgba(200, 230, 255, 0.8)';
+    ctx.lineWidth = 1;
     
-    const windFactor = getWindFactor(); // Calculate wind influence
-    
-    raindropsRef.current.forEach((drop) => {
-      // Update position
-      drop.y += drop.speed;
-      
-      // Reset if off screen
-      if (drop.y > canvasHeight.current) {
-        Object.assign(drop, createRaindrop(true));
-        
-        // Add splash effect
-        createSplash(ctx, drop.x, canvasHeight.current);
-      }
-      
-      // Draw raindrop
+    raindropsRef.current.forEach((drop, i) => {
       ctx.beginPath();
       ctx.moveTo(drop.x, drop.y);
-      ctx.lineTo(
-        drop.x + windFactor, 
-        drop.y + drop.length
-      );
+      
+      // Calculate the end position with wind angle
+      const endX = drop.x + drop.length * windFactor;
+      const endY = drop.y + drop.length;
+      
+      ctx.lineTo(endX, endY);
+      ctx.globalAlpha = drop.opacity;
       ctx.lineWidth = drop.thickness;
-      ctx.strokeStyle = `rgba(200, 200, 240, ${drop.opacity})`;
       ctx.stroke();
+      
+      // Update position for next frame
+      drop.y += drop.speed;
+      drop.x += windFactor * drop.speed * 0.5; // Horizontal movement based on wind
+      
+      // If raindrop goes off screen, reset it
+      if (drop.y > canvasHeight.current) {
+        // Create splash effect for larger/heavier drops
+        if (drop.thickness > 1.5 || heavy) {
+          createSplash(ctx, endX, canvasHeight.current);
+        }
+        
+        raindropsRef.current[i] = createRaindrop(true);
+      }
     });
   };
-
-  // Create a splash effect at the bottom
+  
+  // Create a small splash effect when raindrops hit the ground
   const createSplash = (ctx: CanvasRenderingContext2D, x: number, y: number) => {
-    // Only create splash occasionally
-    if (Math.random() > 0.3) return;
+    const radius = heavy ? Math.random() * 3 + 2 : Math.random() * 2 + 1;
     
-    const size = 2 + Math.random() * 2;
-    
-    // Draw splash circle
     ctx.beginPath();
-    ctx.arc(x, y, size, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(200, 200, 240, 0.3)';
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = heavy ? 'rgba(180, 200, 225, 0.6)' : 'rgba(200, 230, 255, 0.5)';
     ctx.fill();
+    
+    // Ripple effect for heavy rain
+    if (heavy) {
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 2, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(180, 200, 225, 0.3)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
   };
-
+  
   // Animation loop
   const animate = () => {
     if (!canvasRef.current) return;
@@ -137,54 +148,42 @@ export default function RainEffect({
     
     drawRain(ctx);
     
-    // Continue animation
     animationFrameRef.current = requestAnimationFrame(animate);
   };
-
-  // Initialize canvas and raindrops, start animation
+  
+  // Set up the canvas and start the animation
   useEffect(() => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
     const updateCanvasSize = () => {
-      if (!canvas) return;
+      if (!canvasRef.current) return;
       
-      // Set canvas to window size
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      canvasRef.current.width = window.innerWidth;
+      canvasRef.current.height = window.innerHeight;
       
-      canvasWidth.current = canvas.width;
-      canvasHeight.current = canvas.height;
+      canvasWidth.current = canvasRef.current.width;
+      canvasHeight.current = canvasRef.current.height;
     };
     
-    // Initialize canvas size
     updateCanvasSize();
-    
-    // Handle window resize
     window.addEventListener('resize', updateCanvasSize);
     
-    // Initialize raindrops
     initRaindrops();
+    animate();
     
-    // Start animation if intensity is not none
-    if (intensity !== 'none') {
-      animate();
-    }
-    
-    // Cleanup function
     return () => {
       window.removeEventListener('resize', updateCanvasSize);
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [intensity, precipitation, windSpeed]);
-
-  // Don't render if intensity is 'none'
-  if (intensity === 'none') return null;
-
+  }, [intensity, precipitation, windSpeed, heavy]);
+  
+  // Don't render if intensity is none
+  if (intensity === 'none') {
+    return null;
+  }
+  
   return (
-    <canvas 
-      ref={canvasRef} 
-      className="absolute inset-0 w-full h-full pointer-events-none weather-effect"
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 w-full h-full pointer-events-none z-10"
       aria-hidden="true"
     />
   );

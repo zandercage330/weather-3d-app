@@ -1,15 +1,18 @@
 'use client';
 
-import { useState } from 'react';
 import SettingsPanel from './SettingsPanel';
 
-export default function SettingsButton() {
-  const [isOpen, setIsOpen] = useState(false);
+interface SettingsButtonProps {
+  onClick: () => void;
+  isOpen: boolean;
+  onClose: () => void;
+}
 
+export default function SettingsButton({ onClick, isOpen, onClose }: SettingsButtonProps) {
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={onClick}
         className="flex items-center gap-1 p-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
         aria-label="Open settings"
       >
@@ -29,7 +32,7 @@ export default function SettingsButton() {
         <span className="hidden sm:inline">Settings</span>
       </button>
       
-      <SettingsPanel isOpen={isOpen} onClose={() => setIsOpen(false)} />
+      <SettingsPanel isOpen={isOpen} onClose={onClose} />
     </>
   );
 } 

@@ -28,15 +28,26 @@ function isRateLimited(ip: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
+  console.log('API route called:', request.url);
+  
   try {
     // Get client IP for rate limiting
     const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    console.log('Client IP:', ip);
     
     // Check rate limiting
     if (isRateLimited(ip)) {
+      console.log('Rate limit exceeded for IP:', ip);
       return NextResponse.json(
         { error: 'Rate limit exceeded' },
-        { status: 429 }
+        { 
+          status: 429,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          }
+        }
       );
     }
     
@@ -46,7 +57,14 @@ export async function GET(request: NextRequest) {
       console.error('WeatherAPI key is not configured');
       return NextResponse.json(
         { error: 'Weather service configuration error' },
-        { status: 500 }
+        { 
+          status: 500,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          }
+        }
       );
     }
     
@@ -56,10 +74,20 @@ export async function GET(request: NextRequest) {
     const days = searchParams.get('days') || '5';
     const endpoint = searchParams.get('endpoint') || 'forecast';
     
+    console.log('Query parameters:', { q, days, endpoint });
+    
     if (!q) {
+      console.error('Missing location query parameter');
       return NextResponse.json(
         { error: 'Location query is required' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          }
+        }
       );
     }
     
@@ -69,9 +97,17 @@ export async function GET(request: NextRequest) {
     
     // Validate endpoint to prevent injection
     if (!['current', 'forecast', 'search'].includes(endpoint)) {
+      console.error('Invalid endpoint requested:', endpoint);
       return NextResponse.json(
         { error: 'Invalid endpoint' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          }
+        }
       );
     }
     
@@ -86,26 +122,66 @@ export async function GET(request: NextRequest) {
       apiUrl += `&days=${sanitizedDays}&alerts=yes`;
     }
     
+    console.log('Fetching from WeatherAPI:', apiUrl.replace(apiKey, '[REDACTED]'));
+    
     // Make the request to WeatherAPI
     const response = await fetch(apiUrl);
+    
+    console.log('WeatherAPI response status:', response.status);
     
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       console.error('WeatherAPI error:', errorData);
       return NextResponse.json(
-        { error: 'Error fetching weather data' },
-        { status: response.status }
+        { error: 'Error fetching weather data', details: errorData },
+        { 
+          status: response.status,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          }
+        }
       );
     }
     
     const data = await response.json();
-    return NextResponse.json(data);
+    console.log('WeatherAPI data successfully retrieved');
+    
+    return NextResponse.json(data, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      }
+    });
     
   } catch (error) {
     console.error('Weather API route error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' },
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        }
+      }
     );
   }
+}
+
+// Handle OPTIONS request for CORS preflight
+export async function OPTIONS(request: NextRequest) {
+  return NextResponse.json(
+    {},
+    {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type'
+      },
+    }
+  );
 } 

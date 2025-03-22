@@ -6,6 +6,7 @@ import { EffectIntensity } from './WeatherEffectsManager';
 interface CloudEffectProps {
   intensity: EffectIntensity;
   coverage: number; // 0-100 value for cloud coverage
+  dark?: boolean; // Whether to use darker clouds for night/storm
 }
 
 interface Cloud {
@@ -24,7 +25,8 @@ interface Cloud {
  */
 export default function CloudEffect({ 
   intensity = 'medium', 
-  coverage = 50 
+  coverage = 50,
+  dark = false
 }: CloudEffectProps) {
   const [clouds, setClouds] = useState<Cloud[]>([]);
   
@@ -41,69 +43,71 @@ export default function CloudEffect({
     return Math.floor(baseCount * (coverage / 50));
   };
   
-  // Generate clouds with random properties
+  // Generate clouds with varying properties
   const generateClouds = () => {
-    const count = getCloudCount();
+    const cloudCount = getCloudCount();
     const newClouds: Cloud[] = [];
     
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < cloudCount; i++) {
       newClouds.push({
         id: i,
-        width: 100 + Math.random() * 200, // 100-300px width
-        height: 60 + Math.random() * 100, // 60-160px height
-        opacity: 0.3 + Math.random() * 0.5, // 0.3-0.8 opacity
-        top: Math.random() * 50, // 0-50% from top
-        speed: 30 + Math.random() * 40, // 30-70s to cross the screen
-        delay: Math.random() * -30, // Random start delay
-        zIndex: Math.floor(Math.random() * 3) // 0-2 z-index for layering
+        width: Math.floor(Math.random() * 100) + 150, // 150-250px
+        height: Math.floor(Math.random() * 40) + 80, // 80-120px
+        opacity: (Math.random() * 0.4) + (dark ? 0.6 : 0.3), // More opaque if dark
+        top: Math.floor(Math.random() * 60), // 0-60% from top
+        speed: (Math.random() * 80) + 40, // 40-120s to cross screen
+        delay: Math.random() * 40, // 0-40s delay before animation starts
+        zIndex: Math.floor(Math.random() * 3), // 0-2 z-index
       });
     }
     
     setClouds(newClouds);
   };
   
-  // Initialize clouds on mount and when props change
+  // Generate clouds on mount and when intensity/coverage changes
   useEffect(() => {
     generateClouds();
-  }, [intensity, coverage]);
+  }, [intensity, coverage, dark]);
   
-  // Don't render if intensity is 'none'
-  if (intensity === 'none') return null;
+  // Skip rendering if intensity is none
+  if (intensity === 'none' || clouds.length === 0) {
+    return null;
+  }
   
   return (
-    <div 
-      className="absolute inset-0 overflow-hidden weather-effect pointer-events-none"
-      aria-hidden="true"
-    >
-      {clouds.map(cloud => (
+    <div className="cloud-effect fixed inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
+      {clouds.map((cloud) => (
         <div 
           key={cloud.id}
-          className="cloud absolute" 
+          className="absolute left-full"
           style={{
             width: `${cloud.width}px`,
             height: `${cloud.height}px`,
             top: `${cloud.top}%`,
-            left: '-20%',
             opacity: cloud.opacity,
             zIndex: cloud.zIndex,
-            animation: `cloud-drift ${cloud.speed}s linear ${cloud.delay}s infinite`,
-            borderRadius: '50%',
-            filter: 'blur(20px)',
-            background: 'rgba(255, 255, 255, 0.8)'
+            animation: `float-cloud ${cloud.speed}s linear infinite`,
+            animationDelay: `-${cloud.delay}s`,
+            backgroundColor: dark ? 'rgba(40, 40, 50, 0.8)' : 'rgba(255, 255, 255, 0.8)',
+            borderRadius: '50px',
+            filter: 'blur(8px)',
+            boxShadow: dark 
+              ? 'inset 10px -10px 20px rgba(20, 20, 25, 0.5)' 
+              : 'inset 10px -10px 20px rgba(255, 255, 255, 0.8)',
           }}
         />
       ))}
       
-      {/* Heavy cloud cover for high coverage conditions */}
-      {coverage > 70 && (
-        <div 
-          className="cloud-cover absolute inset-0"
-          style={{
-            background: 'linear-gradient(to bottom, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 100%)',
-            opacity: (coverage - 70) / 30 * 0.7 // Scale from 0 to 0.7 based on coverage above 70
-          }}
-        />
-      )}
+      <style jsx>{`
+        @keyframes float-cloud {
+          0% {
+            transform: translateX(0);
+          }
+          100% {
+            transform: translateX(-150vw);
+          }
+        }
+      `}</style>
     </div>
   );
 } 

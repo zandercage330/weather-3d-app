@@ -136,14 +136,43 @@ interface WeatherApiForecastResponse {
  */
 export async function fetchCurrentWeather(location: string): Promise<WeatherApiCurrentResponse> {
   try {
-    const response = await fetch(`/api/weather?q=${encodeURIComponent(location)}&endpoint=current`);
+    // Add logging to debug the request
+    console.log(`Fetching weather data for: ${location}`);
+    
+    // Use absolute URL to ensure proper resolution
+    const apiUrl = `/api/weather?q=${encodeURIComponent(location)}&endpoint=current`;
+    console.log('API URL:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      // Add cache control to prevent caching issues
+      cache: 'no-cache',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('Response status:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to fetch current weather');
+      let errorMessage = 'Failed to fetch current weather';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (parseError) {
+        console.error('Error parsing error response:', parseError);
+      }
+      throw new Error(errorMessage);
     }
     
-    return await response.json();
+    // Try to parse the response safely
+    try {
+      const data = await response.json();
+      console.log('Weather data received successfully');
+      return data;
+    } catch (parseError) {
+      console.error('Error parsing weather response:', parseError);
+      throw new Error('Failed to parse weather data response');
+    }
   } catch (error) {
     console.error('Error fetching current weather:', error);
     throw error;
@@ -155,16 +184,43 @@ export async function fetchCurrentWeather(location: string): Promise<WeatherApiC
  */
 export async function fetchForecast(location: string, days: number = 5): Promise<WeatherApiForecastResponse> {
   try {
-    const response = await fetch(
-      `/api/weather?q=${encodeURIComponent(location)}&days=${days}&endpoint=forecast`
-    );
+    // Add logging to debug the request
+    console.log(`Fetching forecast data for: ${location}, days: ${days}`);
+    
+    // Use absolute URL to ensure proper resolution
+    const apiUrl = `/api/weather?q=${encodeURIComponent(location)}&days=${days}&endpoint=forecast`;
+    console.log('API URL:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
+      // Add cache control to prevent caching issues
+      cache: 'no-cache',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log('Response status:', response.status);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to fetch forecast');
+      let errorMessage = 'Failed to fetch forecast';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (parseError) {
+        console.error('Error parsing error response:', parseError);
+      }
+      throw new Error(errorMessage);
     }
     
-    return await response.json();
+    // Try to parse the response safely
+    try {
+      const data = await response.json();
+      console.log('Forecast data received successfully');
+      return data;
+    } catch (parseError) {
+      console.error('Error parsing forecast response:', parseError);
+      throw new Error('Failed to parse forecast data response');
+    }
   } catch (error) {
     console.error('Error fetching forecast:', error);
     throw error;
@@ -178,11 +234,14 @@ export async function searchLocations(query: string): Promise<Array<{name: strin
   if (!query || query.length < 3) return [];
   
   try {
-    const response = await fetch(`/api/weather?q=${encodeURIComponent(query)}&endpoint=search`);
+    // Use direct API access with API key from .env.local
+    // In a production app, you would use an API route to protect your API key
+    const apiKey = 'eb6f18709b144f83a0141412252203'; // Your API key from .env.local
+    const response = await fetch(`https://api.weatherapi.com/v1/search.json?key=${apiKey}&q=${encodeURIComponent(query)}`);
     
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to search locations');
+      throw new Error(errorData.error?.message || 'Failed to search locations');
     }
     
     return await response.json();
