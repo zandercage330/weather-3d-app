@@ -5,6 +5,7 @@
  */
 
 import { WeatherData, ForecastDay, WeatherAlert, AirQualityData } from './weatherService';
+import { fetchWithRateLimit, handleError } from './errorHandling';
 
 // Types for WeatherAPI responses based on their API documentation
 interface WeatherApiCurrentResponse {
@@ -141,41 +142,16 @@ export async function fetchCurrentWeather(location: string): Promise<WeatherApiC
     
     // Use absolute URL to ensure proper resolution
     const apiUrl = `/api/weather?q=${encodeURIComponent(location)}&endpoint=current`;
-    console.log('API URL:', apiUrl);
     
-    const response = await fetch(apiUrl, {
-      // Add cache control to prevent caching issues
-      cache: 'no-cache',
+    // Use rate-limited fetch with endpoint tracking
+    return await fetchWithRateLimit(apiUrl, 'current_weather', {
       headers: {
         'Content-Type': 'application/json'
       }
     });
-    
-    console.log('Response status:', response.status);
-    
-    if (!response.ok) {
-      let errorMessage = 'Failed to fetch current weather';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
-      } catch (parseError) {
-        console.error('Error parsing error response:', parseError);
-      }
-      throw new Error(errorMessage);
-    }
-    
-    // Try to parse the response safely
-    try {
-      const data = await response.json();
-      console.log('Weather data received successfully');
-      return data;
-    } catch (parseError) {
-      console.error('Error parsing weather response:', parseError);
-      throw new Error('Failed to parse weather data response');
-    }
   } catch (error) {
-    console.error('Error fetching current weather:', error);
-    throw error;
+    const errorMessage = handleError(error, 'fetchCurrentWeather');
+    throw new Error(errorMessage);
   }
 }
 
@@ -189,41 +165,16 @@ export async function fetchForecast(location: string, days: number = 5): Promise
     
     // Use absolute URL to ensure proper resolution
     const apiUrl = `/api/weather?q=${encodeURIComponent(location)}&days=${days}&endpoint=forecast`;
-    console.log('API URL:', apiUrl);
     
-    const response = await fetch(apiUrl, {
-      // Add cache control to prevent caching issues
-      cache: 'no-cache',
+    // Use rate-limited fetch with endpoint tracking
+    return await fetchWithRateLimit(apiUrl, 'forecast_weather', {
       headers: {
         'Content-Type': 'application/json'
       }
     });
-    
-    console.log('Response status:', response.status);
-    
-    if (!response.ok) {
-      let errorMessage = 'Failed to fetch forecast';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
-      } catch (parseError) {
-        console.error('Error parsing error response:', parseError);
-      }
-      throw new Error(errorMessage);
-    }
-    
-    // Try to parse the response safely
-    try {
-      const data = await response.json();
-      console.log('Forecast data received successfully');
-      return data;
-    } catch (parseError) {
-      console.error('Error parsing forecast response:', parseError);
-      throw new Error('Failed to parse forecast data response');
-    }
   } catch (error) {
-    console.error('Error fetching forecast:', error);
-    throw error;
+    const errorMessage = handleError(error, 'fetchForecast');
+    throw new Error(errorMessage);
   }
 }
 
@@ -234,17 +185,14 @@ export async function searchLocations(query: string): Promise<Array<{name: strin
   if (!query || query.length < 3) return [];
   
   try {
-    // Use direct API access with API key from .env.local
-    // In a production app, you would use an API route to protect your API key
-    const apiKey = 'eb6f18709b144f83a0141412252203'; // Your API key from .env.local
-    const response = await fetch(`https://api.weatherapi.com/v1/search.json?key=${apiKey}&q=${encodeURIComponent(query)}`);
+    const apiUrl = `/api/locationSearch?query=${encodeURIComponent(query)}`;
     
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Failed to search locations');
-    }
-    
-    return await response.json();
+    // Use rate-limited fetch with endpoint tracking
+    return await fetchWithRateLimit(apiUrl, 'location_search', {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
   } catch (error) {
     console.error('Error searching locations:', error);
     return [];

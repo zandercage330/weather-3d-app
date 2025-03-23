@@ -16,6 +16,16 @@ import AirQualityIndicator from './components/AirQualityIndicator';
 import NotificationButton from './components/NotificationButton';
 import SettingsButton from './components/SettingsButton';
 import Logo from './components/Logo';
+import AdvancedHourlyForecast from './components/AdvancedHourlyForecast';
+import EnhancedWeatherAlerts from './components/EnhancedWeatherAlerts';
+import EnhancedWeatherCard from './components/EnhancedWeatherCard';
+import PrecipitationAnalysis from './components/PrecipitationAnalysis';
+import { WeatherHistoryCard } from './components/WeatherHistoryCard';
+import EnhancedLocationSearch from './components/EnhancedLocationSearch';
+import CurrentLocationButton from './components/CurrentLocationButton';
+import SavedLocationsManager from './components/SavedLocationsManager';
+import SettingsPanel from './components/SettingsPanel';
+import { OfflineIndicator } from './components/ui/OfflineIndicator';
 
 function HomePage() {
   const { preferences, updatePreference } = useUserPreferences();
@@ -25,7 +35,19 @@ function HomePage() {
   const [forecastData, setForecastData] = useState<ForecastDay[]>([]);
   const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [useAdvancedComponents, setUseAdvancedComponents] = useState(true);
   const { searchTerm, searchResults, isSearching, handleSearch, handleResultSelect, clearSearch } = useLocationSearch();
+
+  // Create a wrapper function for handleResultSelect to match the expected signature
+  const handleLocationSelect = (location: string) => {
+    // Create a simple object to simulate a LocationResult
+    const locationResult = {
+      name: location,
+      country: '',
+      displayName: location
+    };
+    handleResultSelect(locationResult);
+  };
 
   // Fetch weather data based on the location in preferences
   useEffect(() => {
@@ -43,20 +65,23 @@ function HomePage() {
         setWeatherData(weather);
         setForecastData(forecast);
         setAlerts(alertsData);
+        
+        // Generate and add notifications based on the new weather data
+        if (notificationPreferences.enabled) {
+          const notifications = generateWeatherNotifications(weather, forecast, alertsData, notificationPreferences);
+          if (notifications.length > 0) {
+            addNotifications(notifications);
+          }
+        }
       } catch (error) {
-        console.error('Error fetching weather data:', error);
+        console.error('Error loading weather data:', error);
       } finally {
         setIsLoading(false);
       }
     }
-
+    
     loadWeatherData();
-    
-    // Set up a periodic refresh for weather data
-    const refreshInterval = setInterval(loadWeatherData, 15 * 60 * 1000); // Refresh every 15 minutes
-    
-    return () => clearInterval(refreshInterval);
-  }, [preferences.defaultLocation]);
+  }, [preferences.defaultLocation, notificationPreferences, addNotifications]);
   
   // Generate notifications when weather data changes
   useEffect(() => {
@@ -104,66 +129,173 @@ function HomePage() {
   }, [weatherData, forecastData, alerts, notificationPreferences, addNotifications]);
 
   return (
-    <NotificationProvider>
+    <div className="relative min-h-screen">
+      {/* Offline indicator */}
+      <OfflineIndicator />
+      
+      {/* Background */}
       <WeatherBackground 
         condition={weatherData?.condition || 'clear'} 
         timeOfDay={weatherData?.timeOfDay || 'day'}
       >
-        <div className="flex flex-col h-screen max-h-screen overflow-hidden p-4">
-          {/* Header section */}
-          <header className="flex justify-between items-center mb-6">
-            <Logo />
-            <div className="flex space-x-3">
+        <div className="container mx-auto p-4 relative z-10 overflow-auto max-h-screen">
+          {/* Header with search and buttons */}
+          <header className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+            <div className="flex items-center">
+              <Logo />
+            </div>
+            
+            <div className="flex-1 max-w-xl">
+              <EnhancedLocationSearch
+                onLocationSelect={handleLocationSelect}
+                className=""
+              />
+            </div>
+            
+            <div className="flex items-center gap-2">
               <NotificationButton />
               <SettingsButton 
-                onClick={() => setIsSettingsOpen(true)} 
                 isOpen={isSettingsOpen} 
-                onClose={() => setIsSettingsOpen(false)} 
+                onClose={() => setIsSettingsOpen(false)}
+                onClick={() => setIsSettingsOpen(true)} 
               />
             </div>
           </header>
-
-          {/* Location search */}
-          <div className="mb-6 relative z-10">
-            <LocationSearch
-              searchTerm={searchTerm}
-              searchResults={searchResults}
-              isSearching={isSearching}
-              onSearch={handleSearch}
-              onResultSelect={handleResultSelect}
-              onClearSearch={clearSearch}
+          
+          {/* Show saved locations manager in mobile view */}
+          <div className="md:hidden mb-6">
+            <SavedLocationsManager 
+              currentLocation={preferences.defaultLocation}
+              className="bg-gradient-to-br from-black/40 to-black/60"
+              onSelectLocation={(location: string) => {
+                updatePreference('defaultLocation', location);
+                clearSearch();
+              }}
             />
           </div>
-
-          {/* Main weather content */}
-          <div className="flex-1 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 overflow-y-auto pb-4">
-            <div className="space-y-4 md:col-span-1 lg:col-span-2">
-              <WeatherCard 
-                weatherData={weatherData}
-                isLoading={isLoading}
-                userPreferences={preferences} 
-              />
-              
+          
+          {/* Main content */}
+          <main className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Current weather */}
+            <div className="lg:col-span-2">
+              {weatherData ? (
+                useAdvancedComponents ? (
+                  <EnhancedWeatherCard 
+                    weatherData={weatherData} 
+                    isLoading={false}
+                    userPreferences={preferences}
+                  />
+                ) : (
+                  <WeatherCard 
+                    weatherData={weatherData} 
+                    isLoading={false}
+                    userPreferences={preferences}
+                  />
+                )
+              ) : (
+                <div className="animate-pulse bg-white/10 backdrop-blur-md rounded-xl h-64 flex items-center justify-center">
+                  <p className="text-white/70">Loading weather data...</p>
+                </div>
+              )}
+            </div>
+            
+            {/* Sidebar with additional info and saved locations on desktop */}
+            <div className="space-y-6">
+              {/* Air quality */}
               {weatherData?.airQuality && (
                 <AirQualityIndicator airQuality={weatherData.airQuality} />
               )}
               
+              {/* Weather alerts */}
               {alerts.length > 0 && (
-                <WeatherAlerts alerts={alerts} />
+                useAdvancedComponents ? (
+                  <EnhancedWeatherAlerts alerts={alerts} />
+                ) : (
+                  <WeatherAlerts alerts={alerts} />
+                )
               )}
+              
+              {/* Show saved locations in desktop view */}
+              <div className="hidden md:block">
+                <SavedLocationsManager 
+                  currentLocation={preferences.defaultLocation}
+                  className="bg-gradient-to-br from-black/40 to-black/60"
+                  onSelectLocation={(location: string) => {
+                    updatePreference('defaultLocation', location);
+                    clearSearch();
+                  }}
+                />
+              </div>
             </div>
-            
-            <div className="md:col-span-1 order-first md:order-none">
+          </main>
+          
+          {/* Weather forecast section */}
+          <section className="mt-8">
+            <h2 className="text-2xl font-bold text-white mb-4">7-Day Forecast</h2>
+            {forecastData.length > 0 ? (
               <WeatherForecast 
                 forecastData={forecastData}
-                isLoading={isLoading}
+                isLoading={false}
                 userPreferences={preferences}
               />
-            </div>
+            ) : (
+              <div className="animate-pulse bg-white/10 backdrop-blur-md rounded-xl h-48 flex items-center justify-center">
+                <p className="text-white/70">Loading forecast data...</p>
+              </div>
+            )}
+          </section>
+        
+          {/* Advanced features toggle */}
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={() => setUseAdvancedComponents(!useAdvancedComponents)}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white transition-colors"
+            >
+              {useAdvancedComponents ? 'Switch to Basic View' : 'Switch to Advanced View'}
+            </button>
           </div>
+          
+          {/* Advanced hourly forecast */}
+          {useAdvancedComponents && weatherData && forecastData.length > 0 && forecastData[0]?.hourlyForecast && (
+            <section className="mt-8">
+              <h2 className="text-2xl font-bold text-white mb-4">Hourly Forecast</h2>
+              <AdvancedHourlyForecast 
+                hourlyData={forecastData.flatMap(day => day.hourlyForecast || [])}
+                date={forecastData[0].date}
+                userPreferences={preferences}
+              />
+            </section>
+          )}
+          
+          {/* Precipitation analysis */}
+          {useAdvancedComponents && weatherData && (
+            <section className="mt-8">
+              <h2 className="text-2xl font-bold text-white mb-4">Precipitation Analysis</h2>
+              <PrecipitationAnalysis 
+                forecastData={forecastData}
+                userPreferences={preferences}
+              />
+            </section>
+          )}
+          
+          {/* Weather history card */}
+          {useAdvancedComponents && weatherData && (
+            <section className="mt-8 mb-12">
+              <h2 className="text-2xl font-bold text-white mb-4">Weather History</h2>
+              <WeatherHistoryCard location={preferences.defaultLocation} />
+            </section>
+          )}
         </div>
       </WeatherBackground>
-    </NotificationProvider>
+      
+      {/* Settings panel */}
+      {isSettingsOpen && (
+        <SettingsPanel 
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 

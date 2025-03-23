@@ -6,11 +6,19 @@ import {
   fetchForecast,
   parseCurrentWeather,
   parseForecast,
-  parseAlerts
+  parseAlerts,
+  searchLocations
 } from './weatherApiClient';
 
 // Continue using the existing MCP weather client as a fallback
 import { getCurrentWeatherFromMCP, getForecastFromMCP, getAlertsFromMCP } from './mcpWeatherClient';
+import { weatherCache } from './weatherCache';
+import { 
+  getCurrentWeatherKey, 
+  getForecastKey, 
+  getAlertsKey, 
+  getSearchKey 
+} from './cacheKeyGenerator';
 
 export interface WeatherData {
   temperature: number;
@@ -50,6 +58,14 @@ export interface ForecastDay {
   description?: string;
   uvIndex?: number;
   hourlyForecast?: HourlyForecast[];
+  precipitationAmount?: number; // Total precipitation amount in mm/inches
+  precipitationType?: 'rain' | 'snow' | 'sleet' | 'mixed' | 'none'; // Type of precipitation
+  barometricPressure?: number; // Barometric pressure in hPa
+  pressureTrend?: 'rising' | 'falling' | 'steady'; // Pressure trend
+  visibility?: number; // Visibility in km/miles
+  moonPhase?: string; // Moon phase description
+  chanceOfRain?: number; // Probability of rain 0-100%
+  chanceOfSnow?: number; // Probability of snow 0-100%
 }
 
 export interface HourlyForecast {
@@ -61,6 +77,16 @@ export interface HourlyForecast {
   humidity?: number;
   feelsLike?: number;
   uvIndex: number;
+  windDirection?: string; // Wind direction in degrees or cardinal directions
+  pressureMb?: number; // Pressure in millibars
+  visibility?: number; // Visibility in km/miles
+  dewPoint?: number; // Dew point temperature
+  chanceOfRain?: number; // Probability of rain 0-100%
+  chanceOfSnow?: number; // Probability of snow 0-100%
+  precipitationAmount?: number; // Amount of precipitation expected
+  precipitationType?: 'rain' | 'snow' | 'sleet' | 'mixed' | 'none'; // Type of precipitation expected
+  isThunderstorm?: boolean; // Whether thunderstorms are expected
+  cloudCover?: number; // Cloud cover percentage 0-100%
 }
 
 export interface WeatherAlert {
@@ -68,6 +94,16 @@ export interface WeatherAlert {
   area: string;
   severity: 'Minor' | 'Moderate' | 'Severe' | 'Extreme';
   headline: string;
+  description?: string; // Detailed description of the alert
+  instruction?: string; // Safety instructions
+  startTime?: Date; // Start time of the alert
+  endTime?: Date; // End time of the alert
+  source?: string; // Source of the alert (e.g., NWS, Environment Canada)
+  impactLevel?: 'minimal' | 'minor' | 'moderate' | 'major' | 'extreme'; // Impact level
+  certainty?: 'observed' | 'likely' | 'possible' | 'unlikely'; // Certainty of the event
+  historicalContext?: string; // Historical context of similar events
+  affectedAreas?: string[]; // List of affected areas in more detail
+  updateTime?: Date; // When the alert was last updated
 }
 
 // Public API functions
@@ -77,21 +113,35 @@ export interface WeatherAlert {
  * Uses real WeatherAPI data, falls back to MCP or simulation if needed
  */
 export async function getWeatherData(locationName: string = 'New York, NY'): Promise<WeatherData> {
+  const cacheKey = getCurrentWeatherKey(locationName);
+  
   try {
-    // First attempt to use WeatherAPI
-    const weatherApiData = await fetchCurrentWeather(locationName);
-    return parseCurrentWeather(weatherApiData);
+    // Try to get from cache with improved category-based TTL
+    return await weatherCache.getOrSet(
+      cacheKey,
+      async () => {
+        try {
+          // First attempt to use WeatherAPI
+          const weatherApiData = await fetchCurrentWeather(locationName);
+          return parseCurrentWeather(weatherApiData);
+        } catch (error) {
+          console.error('WeatherAPI fetch failed, trying fallback:', error);
+          
+          try {
+            // Fall back to MCP weather client if WeatherAPI fails
+            const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
+            return await getCurrentWeatherFromMCP(lat, lon, locationName);
+          } catch (mcpError) {
+            console.error('All weather services failed:', mcpError);
+            return getFallbackWeatherData(locationName);
+          }
+        }
+      },
+      'currentWeather' // Use currentWeather TTL category
+    );
   } catch (error) {
-    console.error('WeatherAPI fetch failed, trying fallback:', error);
-    
-    try {
-      // Fall back to MCP weather client if WeatherAPI fails
-      const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
-      return await getCurrentWeatherFromMCP(lat, lon, locationName);
-    } catch (mcpError) {
-      console.error('All weather services failed:', mcpError);
-      return getFallbackWeatherData(locationName);
-    }
+    console.error('Error getting weather data with caching:', error);
+    return getFallbackWeatherData(locationName);
   }
 }
 
@@ -100,24 +150,38 @@ export async function getWeatherData(locationName: string = 'New York, NY'): Pro
  * Uses real WeatherAPI data, falls back to MCP or simulation if needed
  */
 export async function getForecastData(days: number = 5, locationName: string = 'New York, NY'): Promise<ForecastDay[]> {
+  const cacheKey = getForecastKey(locationName, days);
+  
   try {
-    // First attempt to use WeatherAPI
-    const forecastData = await fetchForecast(locationName, days);
-    return parseForecast(forecastData);
+    // Try to get from cache with forecast category TTL
+    return await weatherCache.getOrSet(
+      cacheKey, 
+      async () => {
+        try {
+          // First attempt to use WeatherAPI
+          const forecastData = await fetchForecast(locationName, days);
+          return parseForecast(forecastData);
+        } catch (error) {
+          console.error('WeatherAPI forecast fetch failed, trying fallback:', error);
+          
+          try {
+            // Fall back to MCP weather client if WeatherAPI fails
+            const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
+            const forecast = await getForecastFromMCP(lat, lon);
+            
+            // Limit to requested number of days
+            return forecast.slice(0, days);
+          } catch (mcpError) {
+            console.error('All weather forecast services failed:', mcpError);
+            return getFallbackForecastData();
+          }
+        }
+      },
+      'forecast' // Use forecast TTL category
+    );
   } catch (error) {
-    console.error('WeatherAPI forecast fetch failed, trying fallback:', error);
-    
-    try {
-      // Fall back to MCP weather client if WeatherAPI fails
-      const { lat, lon } = getCoordinatesForLocation(locationName) || { lat: 40.7128, lon: -74.006 };
-      const forecast = await getForecastFromMCP(lat, lon);
-      
-      // Limit to requested number of days
-      return forecast.slice(0, days);
-    } catch (mcpError) {
-      console.error('All weather forecast services failed:', mcpError);
-      return getFallbackForecastData();
-    }
+    console.error('Error getting forecast data with caching:', error);
+    return getFallbackForecastData();
   }
 }
 
@@ -126,25 +190,113 @@ export async function getForecastData(days: number = 5, locationName: string = '
  * Uses real WeatherAPI data when available
  */
 export async function getWeatherAlerts(stateCode: string = 'NY'): Promise<WeatherAlert[]> {
+  const cacheKey = getAlertsKey(stateCode);
+  
   try {
-    // For WeatherAPI, we need a location (not just state code)
-    // We can use the state capital or major city as a representative location
-    const locationName = getLocationFromStateCode(stateCode);
-    
-    // First attempt to use WeatherAPI alerts
-    const forecastData = await fetchForecast(locationName, 1);
-    return parseAlerts(forecastData);
+    // Try to get from cache with alerts category TTL
+    return await weatherCache.getOrSet(
+      cacheKey, 
+      async () => {
+        try {
+          // For WeatherAPI, we need a location (not just state code)
+          // We can use the state capital or major city as a representative location
+          const locationName = getLocationFromStateCode(stateCode);
+          
+          // First attempt to use WeatherAPI alerts
+          const forecastData = await fetchForecast(locationName, 1);
+          return parseAlerts(forecastData);
+        } catch (error) {
+          console.error('WeatherAPI alerts fetch failed, trying fallback:', error);
+          
+          try {
+            // Fall back to MCP weather client
+            return await getAlertsFromMCP(stateCode);
+          } catch (mcpError) {
+            console.error('All weather alert services failed:', mcpError);
+            return [];
+          }
+        }
+      },
+      'alerts' // Use alerts TTL category
+    );
   } catch (error) {
-    console.error('WeatherAPI alerts fetch failed, trying fallback:', error);
-    
-    try {
-      // Fall back to MCP weather client
-      return await getAlertsFromMCP(stateCode);
-    } catch (mcpError) {
-      console.error('All weather alert services failed:', mcpError);
-      return [];
-    }
+    console.error('Error getting weather alerts with caching:', error);
+    return [];
   }
+}
+
+/**
+ * Searches for locations by query string
+ * Cached for a longer period as location data doesn't change frequently
+ */
+export async function searchLocationsWithCache(query: string): Promise<Array<{name: string, region: string, country: string}>> {
+  if (!query || query.trim().length < 2) {
+    return [];
+  }
+  
+  const cacheKey = getSearchKey(query);
+  
+  try {
+    return await weatherCache.getOrSet(
+      cacheKey,
+      () => searchLocations(query),
+      'searchResults' // Long-lived cache for search results
+    );
+  } catch (error) {
+    console.error('Error searching locations:', error);
+    return [];
+  }
+}
+
+/**
+ * Prefetches weather data for common or saved locations
+ * Useful for background loading data that might be needed soon
+ */
+export function prefetchWeatherData(locations: string[]): void {
+  // Don't prefetch if we have no locations
+  if (!locations || locations.length === 0) return;
+  
+  // Prefetch current weather for each location
+  locations.forEach(location => {
+    const weatherKey = getCurrentWeatherKey(location);
+    weatherCache.prefetch(
+      weatherKey,
+      () => fetchCurrentWeather(location).then(parseCurrentWeather),
+      'currentWeather'
+    );
+  });
+  
+  // Prefetch forecast for first location only (most likely to be viewed)
+  if (locations.length > 0) {
+    const forecastKey = getForecastKey(locations[0], 5);
+    weatherCache.prefetch(
+      forecastKey,
+      () => fetchForecast(locations[0], 5).then(parseForecast),
+      'forecast'
+    );
+  }
+}
+
+/**
+ * Invalidates cache for a specific location
+ * Useful when user manually refreshes or when data is known to be stale
+ */
+export function invalidateLocationCache(locationName: string): void {
+  const weatherKey = getCurrentWeatherKey(locationName);
+  weatherCache.delete(weatherKey);
+  
+  // Also invalidate any forecast data
+  for (let days = 1; days <= 10; days++) {
+    const forecastKey = getForecastKey(locationName, days);
+    weatherCache.delete(forecastKey);
+  }
+}
+
+/**
+ * Get cache statistics for debugging
+ */
+export function getWeatherCacheStats(): { size: number, keys: string[] } {
+  return weatherCache.getStats();
 }
 
 // Helper to map state code to a representative location
@@ -327,7 +479,15 @@ export function getFallbackForecastData(): ForecastDay[] {
       sunset: '7:45 PM',
       description: getDescriptionFromCondition(condition),
       uvIndex: Math.round(Math.random() * 10) + 1, // 1-11 UV index
-      hourlyForecast: hourlyForecast
+      hourlyForecast: hourlyForecast,
+      precipitationAmount: Math.round(Math.random() * 10) + 1, // Total precipitation amount in mm/inches
+      precipitationType: (['rain', 'snow', 'sleet', 'mixed', 'none'][Math.floor(Math.random() * 5)] as 'rain' | 'snow' | 'sleet' | 'mixed' | 'none'), // Type of precipitation
+      barometricPressure: Math.round(Math.random() * 1000) + 900, // Barometric pressure in hPa
+      pressureTrend: (['rising', 'falling', 'steady'][Math.floor(Math.random() * 3)] as 'rising' | 'falling' | 'steady'), // Pressure trend
+      visibility: Math.round(Math.random() * 100) + 10, // Visibility in km/miles
+      moonPhase: ['New Moon', 'First Quarter', 'Full Moon', 'Last Quarter'][Math.floor(Math.random() * 4)], // Moon phase description
+      chanceOfRain: Math.round(Math.random() * 100), // Probability of rain 0-100%
+      chanceOfSnow: Math.round(Math.random() * 100), // Probability of snow 0-100%
     });
   }
   

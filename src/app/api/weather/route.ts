@@ -1,13 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { LRUCache } from 'lru-cache';
+import { rateLimit } from '@/app/lib/rateLimit';
 
-// Secure API route to proxy WeatherAPI requests
-// This keeps the API key on the server side
+// Rate limiter for API requests - increase limits
+const limiter = rateLimit({
+  interval: 60 * 1000, // 60 seconds
+  uniqueTokenPerInterval: 100, // Increased from 50 to 100
+});
 
-// Rate limiting variables
+// Cache for API responses - increase capacity and TTL
+const apiCache = new LRUCache<string, any>({
+  max: 200,             // Increased from 100 to 200
+  ttl: 1000 * 60 * 15,  // Increased from 10 to 15 minutes
+});
+
+// Rate limiting variables - increase limits
 const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute window
-const MAX_REQUESTS_PER_WINDOW = 30;  // 30 requests per minute (adjust based on your API plan)
+const MAX_REQUESTS_PER_WINDOW = 50;  // Increased from 30 to 50 requests per minute
 
 const requestCounts = new Map<string, { count: number, resetTime: number }>();
+
+// Track when a client hits the rate limit to provide a more helpful error
+const rateLimitedUntil = new Map<string, number>();
 
 function getRateLimitInfo(ip: string): { count: number, resetTime: number } {
   const now = Date.now();
@@ -15,6 +29,7 @@ function getRateLimitInfo(ip: string): { count: number, resetTime: number } {
   if (!requestCounts.has(ip) || requestCounts.get(ip)!.resetTime < now) {
     // Initialize or reset counter for this IP
     requestCounts.set(ip, { count: 0, resetTime: now + RATE_LIMIT_WINDOW });
+    rateLimitedUntil.delete(ip); // Clear any previous rate limit expiry
   }
   
   return requestCounts.get(ip)!;
@@ -24,150 +39,173 @@ function isRateLimited(ip: string): boolean {
   const rateLimitInfo = getRateLimitInfo(ip);
   rateLimitInfo.count += 1;
   
-  return rateLimitInfo.count > MAX_REQUESTS_PER_WINDOW;
+  if (rateLimitInfo.count > MAX_REQUESTS_PER_WINDOW) {
+    // Set rate limit expiry
+    rateLimitedUntil.set(ip, rateLimitInfo.resetTime);
+    return true;
+  }
+  
+  return false;
 }
 
+/**
+ * Secure API route to proxy requests to WeatherAPI
+ */
 export async function GET(request: NextRequest) {
-  console.log('API route called:', request.url);
-  
   try {
-    // Get client IP for rate limiting
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    console.log('Client IP:', ip);
+    const { searchParams } = request.nextUrl;
+    const query = searchParams.get('q');
+    const days = searchParams.get('days');
+    const endpoint = searchParams.get('endpoint') || 'forecast'; // Default to forecast
     
-    // Check rate limiting
-    if (isRateLimited(ip)) {
-      console.log('Rate limit exceeded for IP:', ip);
+    // Historical data parameters
+    const fromDate = searchParams.get('from');
+    const toDate = searchParams.get('to');
+
+    // Get IP for rate limiting
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    
+    // If client is currently rate limited, check if they can retry
+    if (rateLimitedUntil.has(ip)) {
+      const retryAfter = Math.ceil((rateLimitedUntil.get(ip)! - Date.now()) / 1000);
+      
+      if (retryAfter > 0) {
+        return NextResponse.json(
+          { 
+            error: 'Rate limit exceeded',
+            retryAfter: retryAfter,
+            message: `Too many requests. Please try again in ${retryAfter} seconds.`
+          },
+          { 
+            status: 429,
+            headers: {
+              'Retry-After': retryAfter.toString()
+            }
+          }
+        );
+      } else {
+        // Reset rate limit if expired
+        rateLimitedUntil.delete(ip);
+      }
+    }
+
+    // Check rate limit using the built-in limiter
+    try {
+      // Increased from 10 to 15 requests per minute per client
+      await limiter.check(request, 15, 'WEATHER_API');
+    } catch (error) {
+      // Track when they can retry
+      const resetTime = Date.now() + 60 * 1000; // 1 minute from now
+      rateLimitedUntil.set(ip, resetTime);
+      
       return NextResponse.json(
-        { error: 'Rate limit exceeded' },
+        { 
+          error: 'Rate limit exceeded',
+          retryAfter: 60,
+          message: 'Too many requests. Please try again in 60 seconds.'
+        },
         { 
           status: 429,
           headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
+            'Retry-After': '60'
           }
         }
       );
     }
-    
-    // Get API key from environment variables
+
+    // Validate parameters
+    if (!query) {
+      return NextResponse.json(
+        { error: 'Missing query parameter' },
+        { status: 400 }
+      );
+    }
+
+    // Get API key
     const apiKey = process.env.WEATHER_API_KEY;
     if (!apiKey) {
-      console.error('WeatherAPI key is not configured');
       return NextResponse.json(
-        { error: 'Weather service configuration error' },
-        { 
-          status: 500,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
-          }
-        }
+        { error: 'API configuration error' },
+        { status: 500 }
       );
     }
-    
-    // Get query parameters
-    const { searchParams } = new URL(request.url);
-    const q = searchParams.get('q');
-    const days = searchParams.get('days') || '5';
-    const endpoint = searchParams.get('endpoint') || 'forecast';
-    
-    console.log('Query parameters:', { q, days, endpoint });
-    
-    if (!q) {
-      console.error('Missing location query parameter');
-      return NextResponse.json(
-        { error: 'Location query is required' },
-        { 
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
-          }
+
+    let weatherApiUrl: string;
+    let cacheKey: string;
+
+    // Determine endpoint and build the appropriate URL
+    switch (endpoint) {
+      case 'current':
+        weatherApiUrl = `https://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${query}&aqi=yes`;
+        cacheKey = `current_${query}`;
+        break;
+      case 'forecast':
+        const daysParam = days ? `&days=${days}` : '&days=5';
+        weatherApiUrl = `https://api.weatherapi.com/v1/forecast.json?key=${apiKey}&q=${query}${daysParam}&aqi=yes`;
+        cacheKey = `forecast_${query}_${days || '5'}`;
+        break;
+      case 'history':
+        // Validate history parameters
+        if (!fromDate) {
+          return NextResponse.json(
+            { error: 'Missing from date parameter for historical data' },
+            { status: 400 }
+          );
         }
-      );
+        
+        // If toDate not provided, default to fromDate (one day)
+        const historyToDate = toDate || fromDate;
+        
+        weatherApiUrl = `https://api.weatherapi.com/v1/history.json?key=${apiKey}&q=${query}&dt=${fromDate}&end_dt=${historyToDate}`;
+        cacheKey = `history_${query}_${fromDate}_${historyToDate}`;
+        break;
+      default:
+        return NextResponse.json(
+          { error: 'Invalid endpoint parameter' },
+          { status: 400 }
+        );
     }
-    
-    // Build the WeatherAPI URL with sanitized inputs
-    const baseUrl = process.env.WEATHER_API_BASE_URL || 'https://api.weatherapi.com/v1';
-    let apiUrl: string;
-    
-    // Validate endpoint to prevent injection
-    if (!['current', 'forecast', 'search'].includes(endpoint)) {
-      console.error('Invalid endpoint requested:', endpoint);
-      return NextResponse.json(
-        { error: 'Invalid endpoint' },
-        { 
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
-          }
-        }
-      );
+
+    // Check cache first - add noise to cache key to randomize cache expiration
+    // This prevents all cache entries from expiring at the same time
+    const cacheNoise = Math.floor(Math.random() * 100);
+    const cachedData = apiCache.get(`${cacheKey}_${cacheNoise % 5}`);
+    if (cachedData) {
+      return NextResponse.json(cachedData);
     }
-    
-    // Sanitize inputs and build URL
-    const sanitizedQ = encodeURIComponent(q);
-    const sanitizedDays = encodeURIComponent(days);
-    
-    apiUrl = `${baseUrl}/${endpoint}.json?key=${apiKey}&q=${sanitizedQ}&aqi=yes`;
-    
-    // Add days parameter for forecast endpoint
-    if (endpoint === 'forecast') {
-      apiUrl += `&days=${sanitizedDays}&alerts=yes`;
-    }
-    
-    console.log('Fetching from WeatherAPI:', apiUrl.replace(apiKey, '[REDACTED]'));
-    
-    // Make the request to WeatherAPI
-    const response = await fetch(apiUrl);
-    
-    console.log('WeatherAPI response status:', response.status);
-    
+
+    // Call the WeatherAPI
+    const response = await fetch(weatherApiUrl);
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      console.error('WeatherAPI error:', errorData);
+      // Get error details if available
+      let errorDetail = '';
+      try {
+        const errorData = await response.json();
+        errorDetail = errorData.error?.message || '';
+      } catch (e) {
+        // Ignore parse errors
+      }
+
       return NextResponse.json(
-        { error: 'Error fetching weather data', details: errorData },
         { 
-          status: response.status,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type'
-          }
-        }
+          error: `Weather API error: ${response.status}`,
+          detail: errorDetail
+        },
+        { status: response.status }
       );
     }
-    
+
     const data = await response.json();
-    console.log('WeatherAPI data successfully retrieved');
     
-    return NextResponse.json(data, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
-    });
+    // Store in cache with noise added to key for distributed expiration
+    apiCache.set(`${cacheKey}_${cacheNoise % 5}`, data);
     
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Weather API route error:', error);
+    console.error('Weather API error:', error);
     return NextResponse.json(
-      { error: 'Internal server error', message: error instanceof Error ? error.message : 'Unknown error' },
-      { 
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type'
-        }
-      }
+      { error: 'Failed to fetch weather data' },
+      { status: 500 }
     );
   }
 }

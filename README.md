@@ -137,3 +137,43 @@ The notification system offers extensive customization:
 5. Enable browser notifications when prompted to receive alerts outside the app
 
 The notification system is designed to be unobtrusive while keeping you informed about the weather conditions that matter most to you.
+
+## Geolocation and Saved Locations
+
+The application includes powerful geolocation features and the ability to save your favorite locations for quick access.
+
+### Geolocation Features
+
+- **Automatic Location Detection**: Automatically detects your current location when you allow location access
+- **Reverse Geocoding**: Converts coordinates to readable addresses and location names
+- **Location-based Weather**: Instantly shows weather for your current location
+- **Browser Permission Handling**: Gracefully handles permission requests and denials
+- **Fallback Options**: Provides alternate location options if geolocation is unavailable
+
+### Saved Locations Management
+
+- **Favorite Locations**: Save frequently checked locations for quick access
+- **Quick Toggle**: Easily switch between saved locations with a single click
+- **Custom Names**: Rename saved locations (e.g., "Home", "Work", "Vacation House")
+- **Location Cards**: Visual cards showing current conditions at your saved locations
+- **Synced Preferences**: Location-specific preferences for weather display
+- **Drag-and-Drop Sorting**: Organize your saved locations in order of importance
+
+### Enhanced Location Search
+
+- **Autocomplete**: Get location suggestions as you type
+- **Recent Searches**: Quick access to your recent location searches
+- **Fuzzy Matching**: Find locations even with partial or misspelled names
+- **Smart Defaults**: Improved initial location suggestions based on your region
+- **Detailed Results**: See country, region, and postal code in search results
+
+### How to Use
+
+1. Click the location icon or allow location permission to use your current location
+2. Use the search bar to find any location worldwide
+3. Click the heart/star icon to save a location to your favorites
+4. Access your saved locations from the sidebar or dropdown menu
+5. Click on any saved location to instantly view its weather information
+6. Use the management panel to rename, reorder, or remove saved locations
+
+The location features are designed to make checking weather for different places seamless and efficient.

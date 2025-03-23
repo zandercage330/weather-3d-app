@@ -42,7 +42,7 @@ export default function WeatherBackground({ condition, timeOfDay, children }: We
   
   return (
     <div 
-      className="absolute inset-0 overflow-hidden"
+      className="absolute inset-0 overflow-y-auto"
       style={backgroundStyle}
     >
       {/* Weather effects layer (rain, snow, etc.) */}

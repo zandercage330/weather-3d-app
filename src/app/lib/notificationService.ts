@@ -6,6 +6,7 @@ import {
   checkNotificationRule,
   ScheduledNotification
 } from './notificationScheduleService';
+import { getRecommendedActivities } from './activityRecommendationService';
 
 // Types for notifications
 export interface WeatherNotification {
@@ -26,6 +27,7 @@ export type NotificationType =
   | 'precipitation' // Rain/snow starting or stopping soon
   | 'temperature'  // Significant temperature changes
   | 'uv'           // High UV index warnings
+  | 'activity'     // Activity recommendations
   | 'system';      // App-related notifications
 
 export interface NotificationPreferences {
@@ -40,6 +42,7 @@ export interface NotificationPreferences {
   temperatureNotifications: boolean;
   aqiNotifications: boolean;
   uvNotifications: boolean;
+  activityNotifications: boolean;
   // Notification frequency
   notificationFrequency: 'high' | 'medium' | 'low'; // How frequently to send notifications
   // New threshold settings
@@ -63,6 +66,7 @@ export const defaultNotificationPreferences: NotificationPreferences = {
   temperatureNotifications: true,
   aqiNotifications: true,
   uvNotifications: true,
+  activityNotifications: true,
   notificationFrequency: 'medium',
   // New threshold default values
   temperatureChangeThreshold: 5,
@@ -352,7 +356,9 @@ export function generateWeatherNotifications(
     }
   });
 
-  return [...notifications, ...scheduledNotifications];
+  // Generate activity recommendation notifications
+  const activityNotifications = generateActivityNotifications(weatherData, forecastData, preferences);
+  return [...notifications, ...scheduledNotifications, ...activityNotifications];
 }
 
 // Check if we should limit notifications based on frequency
@@ -419,6 +425,7 @@ function getIconForNotificationType(type: NotificationType): string {
     case 'precipitation': return 'rain';
     case 'temperature': return 'thermometer';
     case 'uv': return 'sun';
+    case 'activity': return 'hiking';
     case 'system': return 'notification';
     default: return 'notification';
   }
@@ -458,4 +465,72 @@ function getNotificationTypeFromRuleType(ruleType: string): NotificationType {
     case 'wind': return 'system';
     default: return 'system';
   }
+}
+
+/**
+ * Generate activity recommendation notifications
+ */
+function generateActivityNotifications(
+  weather: WeatherData,
+  forecast: ForecastDay[] = [],
+  userPreferences: any
+): WeatherNotification[] {
+  const notifications: WeatherNotification[] = [];
+  
+  // Only generate if activity notifications are enabled in preferences
+  if (!userPreferences?.activityNotifications) {
+    return notifications;
+  }
+
+  try {
+    // Get top activity recommendations
+    const recommendations = getRecommendedActivities(weather, {
+      forecast,
+      maxResults: 3
+    });
+    
+    // Only notify about high-scored activities (80%+)
+    const highScoredActivities = recommendations.filter(rec => rec.score >= 80);
+    
+    if (highScoredActivities.length > 0) {
+      const topActivity = highScoredActivities[0];
+      
+      notifications.push({
+        id: `activity-${Date.now()}`,
+        type: 'activity',
+        title: `Perfect Weather for ${topActivity.activity.name}!`,
+        message: topActivity.reason,
+        timestamp: new Date(),
+        priority: 'medium',
+        read: false,
+        data: {
+          activityId: topActivity.activity.id,
+          score: topActivity.score,
+          category: topActivity.activity.category
+        }
+      });
+      
+      // If there are multiple good activities, add a summary notification
+      if (highScoredActivities.length > 1) {
+        const activityNames = highScoredActivities.map(a => a.activity.name).join(', ');
+        
+        notifications.push({
+          id: `activity-summary-${Date.now()}`,
+          type: 'activity',
+          title: 'Great Day for Outdoor Activities',
+          message: `Perfect conditions for: ${activityNames}`,
+          timestamp: new Date(),
+          priority: 'low',
+          read: false,
+          data: {
+            count: highScoredActivities.length
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error generating activity notifications:', error);
+  }
+  
+  return notifications;
 } 

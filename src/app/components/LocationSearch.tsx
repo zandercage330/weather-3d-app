@@ -56,6 +56,7 @@ export default function LocationSearch({
             <button
               type="button"
               onClick={onClearSearch}
+              aria-label="Clear search"
               className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/50 hover:text-white"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -91,7 +92,7 @@ export default function LocationSearch({
       {/* Loading indicator */}
       {isSearching && (
         <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+          <div data-testid="loading-spinner" className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
         </div>
       )}
     </div>
