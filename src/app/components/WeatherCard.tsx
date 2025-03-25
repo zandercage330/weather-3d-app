@@ -3,6 +3,7 @@
 import { WeatherData, toCelsius } from '../lib/weatherService';
 import { UserPreferences } from '../hooks/useUserPreferences';
 import GlassCard from './GlassCard';
+import { WeatherCardSkeleton } from './ui/loading';
 
 export interface WeatherCardProps {
   weatherData: WeatherData | null;
@@ -25,20 +26,7 @@ export default function WeatherCard({ weatherData, isLoading, userPreferences }:
   
   // Display loading skeleton while data is loading
   if (isLoading || !weatherData) {
-    return (
-      <GlassCard className="p-6 animate-pulse" intensity="medium" variant="default">
-        <div className="h-8 bg-white/20 rounded w-3/4 mb-6"></div>
-        <div className="flex items-end mb-4">
-          <div className="h-16 bg-white/20 rounded w-1/3 mr-2"></div>
-          <div className="h-8 bg-white/20 rounded w-1/6"></div>
-        </div>
-        <div className="space-y-3">
-          <div className="h-4 bg-white/20 rounded w-2/3"></div>
-          <div className="h-4 bg-white/20 rounded w-1/2"></div>
-          <div className="h-4 bg-white/20 rounded w-3/4"></div>
-        </div>
-      </GlassCard>
-    );
+    return <WeatherCardSkeleton />;
   }
   
   // Get the display temperature based on unit

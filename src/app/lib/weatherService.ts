@@ -19,6 +19,7 @@ import {
   getAlertsKey, 
   getSearchKey 
 } from './cacheKeyGenerator';
+import { apiHealthCheck } from './apiHealthCheck';
 
 export interface WeatherData {
   temperature: number;
@@ -113,6 +114,14 @@ export interface WeatherAlert {
  * Uses real WeatherAPI data, falls back to MCP or simulation if needed
  */
 export async function getWeatherData(locationName: string = 'New York, NY'): Promise<WeatherData> {
+  const healthStatus = apiHealthCheck.getStatus();
+  
+  // If API is unhealthy, immediately use fallback
+  if (!healthStatus.isHealthy || !healthStatus.serviceStatus.current) {
+    console.warn('Weather API is unhealthy, using fallback data');
+    return getFallbackWeatherData(locationName);
+  }
+
   const cacheKey = getCurrentWeatherKey(locationName);
   
   try {
@@ -150,6 +159,14 @@ export async function getWeatherData(locationName: string = 'New York, NY'): Pro
  * Uses real WeatherAPI data, falls back to MCP or simulation if needed
  */
 export async function getForecastData(days: number = 5, locationName: string = 'New York, NY'): Promise<ForecastDay[]> {
+  const healthStatus = apiHealthCheck.getStatus();
+  
+  // If API is unhealthy, immediately use fallback
+  if (!healthStatus.isHealthy || !healthStatus.serviceStatus.forecast) {
+    console.warn('Weather API forecast endpoint is unhealthy, using fallback data');
+    return getFallbackForecastData();
+  }
+
   const cacheKey = getForecastKey(locationName, days);
   
   try {

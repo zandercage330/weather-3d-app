@@ -1,21 +1,25 @@
 'use client';
 
 import React, { Suspense, useRef, useEffect, useState, Fragment } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, ThreeEvent } from '@react-three/fiber';
 import { 
   OrbitControls, 
   PerspectiveCamera, 
   Environment,
-  Stats 
+  Stats,
+  Sky,
+  Cloud
 } from '@react-three/drei';
 import { 
   EffectComposer, 
   Bloom, 
   Vignette, 
   ChromaticAberration,
-  DepthOfField
+  DepthOfField,
+  SMAA
 } from '@react-three/postprocessing';
-import { BlendFunction } from 'postprocessing';
+import { BlendFunction, KernelSize } from 'postprocessing';
+import * as THREE from 'three';
 
 // Import our effects
 import CloudSystem from './effects/CloudSystem';
@@ -24,6 +28,8 @@ import SnowSystem from './effects/SnowSystem';
 import SkyBox from './effects/SkyBox';
 import FogEffect from './effects/FogEffect';
 import LightningEffect from './effects/LightningEffect';
+import PerformanceMonitor from './effects/PerformanceMonitor';
+import AccessibilityManager from './effects/AccessibilityManager';
 
 interface CameraProps {
   timeOfDay?: 'day' | 'night';
@@ -100,10 +106,162 @@ interface WeatherSceneProps {
   cloudCover?: number;
   windSpeed?: number;
   fullScreen?: boolean;
+  intensity?: number;
+  showPerformanceStats?: boolean;
+  onPerformanceDrop?: (fps: number) => void;
+  onInteraction?: (event: { type: string; position: THREE.Vector3 }) => void;
+  onAccessibilityAnnouncement?: (message: string) => void;
 }
 
 // Transition duration in seconds
 const TRANSITION_DURATION = 2.0;
+
+// Performance optimization component
+const PerformanceOptimizer: React.FC<{ condition: string }> = ({ condition }) => {
+  const { gl } = useThree();
+  
+  useEffect(() => {
+    // Optimize renderer based on weather condition
+    (gl as THREE.WebGLRenderer).toneMapping = THREE.ACESFilmicToneMapping;
+    (gl as THREE.WebGLRenderer).toneMappingExposure = condition === 'night' ? 0.5 : 1;
+    
+    // Enable shadow optimization
+    gl.shadowMap.type = THREE.PCFSoftShadowMap;
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+    };
+  }, [gl, condition]);
+  
+  return null;
+};
+
+// Enhanced dynamic lighting
+const EnhancedLighting: React.FC<{
+  condition: string;
+  timeOfDay: 'day' | 'night';
+  intensity: number;
+}> = ({ condition, timeOfDay, intensity }) => {
+  const lightRef = useRef<THREE.DirectionalLight>(null);
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const { scene } = useThree();
+
+  useEffect(() => {
+    if (!lightRef.current || !ambientRef.current) return;
+
+    const isDaytime = timeOfDay === 'day';
+    const baseIntensity = isDaytime ? 1.0 : 0.3;
+    const weatherFactor = condition === 'clear' ? 1 : 
+                         condition === 'cloudy' ? 0.7 :
+                         condition === 'rain' ? 0.5 :
+                         condition === 'snow' ? 0.8 : 0.6;
+
+    const targetIntensity = baseIntensity * weatherFactor;
+    lightRef.current.intensity = targetIntensity;
+    
+    const ambientIntensity = isDaytime ? 0.4 : 0.2;
+    ambientRef.current.intensity = ambientIntensity * weatherFactor;
+
+    const lightColor = isDaytime ? 
+      new THREE.Color(0xffffff).multiplyScalar(intensity) : 
+      new THREE.Color(0x2c5aa0).multiplyScalar(intensity * 0.8);
+    
+    lightRef.current.color = lightColor;
+    
+    // Enhanced shadow settings
+    if (lightRef.current.shadow.camera) {
+      const shadowCamera = lightRef.current.shadow.camera;
+      shadowCamera.near = 1;
+      shadowCamera.far = 50;
+      shadowCamera.left = -10;
+      shadowCamera.right = 10;
+      shadowCamera.top = 10;
+      shadowCamera.bottom = -10;
+      
+      // Higher resolution shadows for better quality
+      lightRef.current.shadow.mapSize.width = 2048;
+      lightRef.current.shadow.mapSize.height = 2048;
+      lightRef.current.shadow.bias = -0.001;
+      lightRef.current.shadow.normalBias = 0.05;
+    }
+  }, [condition, timeOfDay, intensity]);
+
+  return (
+    <>
+      <ambientLight ref={ambientRef} />
+      <directionalLight
+        ref={lightRef}
+        position={[5, 5, 5]}
+        castShadow
+      />
+      {/* Add subtle fill light for better shadows */}
+      <hemisphereLight
+        intensity={0.3}
+        color={timeOfDay === 'day' ? '#ffffff' : '#2c5aa0'}
+        groundColor={timeOfDay === 'day' ? '#ffffff' : '#000000'}
+      />
+    </>
+  );
+};
+
+// Atmospheric effects based on weather
+const AtmosphericEffects = ({ 
+  condition, 
+  temperature,
+  windSpeed,
+  intensity = 0.5 
+}: {
+  condition: string;
+  temperature: number;
+  windSpeed: number;
+  intensity?: number;
+}) => {
+  const cloudIntensity = condition === 'cloudy' ? intensity : 
+                        condition === 'rain' ? intensity * 0.8 :
+                        condition === 'snow' ? intensity * 0.6 : 0.2;
+
+  return (
+    <>
+      {/* Dynamic clouds */}
+      <Cloud
+        opacity={cloudIntensity}
+        speed={0.4}
+        segments={20}
+        position={[0, 5, -5]}
+        scale={[3, 1, 1]}
+      />
+      
+      {/* Weather effects */}
+      {condition === 'rain' && (
+        <RainSystem 
+          intensity={intensity}
+          temperature={temperature}
+          windSpeed={windSpeed}
+        />
+      )}
+      {condition === 'snow' && (
+        <SnowSystem 
+          intensity={intensity}
+          temperature={temperature}
+          windSpeed={windSpeed}
+        />
+      )}
+      
+      {/* Fog effect for all conditions */}
+      <FogEffect 
+        intensity={
+          condition === 'cloudy' ? intensity * 0.5 :
+          condition === 'rain' ? intensity * 0.3 :
+          condition === 'snow' ? intensity * 0.4 : 0.1
+        }
+        temperature={temperature}
+        windSpeed={windSpeed}
+      />
+    </>
+  );
+};
 
 const WeatherScene: React.FC<WeatherSceneProps> = ({
   condition = 'clear',
@@ -114,6 +272,11 @@ const WeatherScene: React.FC<WeatherSceneProps> = ({
   cloudCover = 0.2, // 0 to 1
   windSpeed = 0, // mph
   fullScreen = false,
+  intensity = 0.5,
+  showPerformanceStats = false,
+  onPerformanceDrop,
+  onInteraction,
+  onAccessibilityAnnouncement
 }) => {
   // Track previous weather states for transitions
   const [prevCondition, setPrevCondition] = useState(condition);
@@ -130,6 +293,9 @@ const WeatherScene: React.FC<WeatherSceneProps> = ({
   // Track the last update time for animation
   const lastUpdateTime = useRef(Date.now());
   
+  // Accessibility announcement state
+  const [accessibilityMessage, setAccessibilityMessage] = useState<string>('');
+
   // Detect condition changes and trigger transitions
   useEffect(() => {
     if (condition !== prevCondition) {
@@ -268,79 +434,132 @@ const WeatherScene: React.FC<WeatherSceneProps> = ({
   // Environment settings based on conditions
   const isDark = timeOfDay === 'night' || condition === 'storm';
 
+  // Add interaction handler
+  const handleSceneInteraction = (event: THREE.Event) => {
+    if (!onInteraction) return;
+    
+    const intersects = (event as any).intersects;
+    if (intersects && intersects.length > 0) {
+      const position = intersects[0].point;
+      onInteraction({
+        type: event.type,
+        position: position
+      });
+    }
+  };
+
+  // Handle accessibility announcements
+  useEffect(() => {
+    if (accessibilityMessage && onAccessibilityAnnouncement) {
+      onAccessibilityAnnouncement(accessibilityMessage);
+    }
+  }, [accessibilityMessage, onAccessibilityAnnouncement]);
+
   return (
-    <div className={`${fullScreen ? 'w-screen h-screen' : 'w-full h-[400px]'}`}>
-      <Canvas shadows camera={{ position: [0, 3, 13], fov: 50 }}>
-        {/* Animated Camera */}
-        <AnimatedCamera timeOfDay={timeOfDay} condition={condition} />
-        
-        {/* Sky */}
-        <SkyBox timeOfDay={timeOfDay} />
-        
-        {/* Lighting */}
-        <ambientLight intensity={timeOfDay === 'day' ? 1 : 0.2} />
-        <directionalLight 
-          position={[10, 10, 5]} 
-          intensity={timeOfDay === 'day' ? 1.5 : 0.2} 
-          castShadow 
-          shadow-mapSize={[2048, 2048]}
+    <div 
+      className={`${fullScreen ? 'w-screen h-screen' : 'w-full h-[400px]'} relative`}
+      role="region"
+      aria-label="Interactive weather visualization"
+    >
+      <Canvas
+        shadows
+        camera={{ position: [0, 3, 13], fov: 50 }}
+        dpr={[1, 2]}
+        performance={{ min: 0.5 }}
+        onPointerDown={handleSceneInteraction}
+        onPointerMove={handleSceneInteraction}
+      >
+        <PerformanceMonitor
+          enabled={true}
+          showStats={showPerformanceStats}
+          onPerformanceDrop={onPerformanceDrop}
         />
         
-        {/* Add some subtle light for depth */}
-        <pointLight position={[-10, 0, -10]} intensity={0.2} color={timeOfDay === 'night' ? '#3498db' : '#ffffff'} />
+        <PerformanceOptimizer condition={condition} />
+        
+        <AnimatedCamera timeOfDay={timeOfDay} condition={condition} />
+        
+        <Sky 
+          distance={450000}
+          sunPosition={timeOfDay === 'day' ? [0, 1, 0] : [0, -1, 0]}
+          inclination={timeOfDay === 'day' ? 0.6 : 0.1}
+          azimuth={0.25}
+          turbidity={condition === 'cloudy' ? 10 : 6}
+          rayleigh={condition === 'clear' ? 1 : 3}
+        />
+        
+        <EnhancedLighting 
+          condition={condition}
+          timeOfDay={timeOfDay}
+          intensity={intensity}
+        />
         
         <Suspense fallback={null}>
-          {/* Clouds */}
           <CloudSystem 
             density={cloudDensity}
             count={fullScreen ? 50 : 30}
             speed={cloudSpeed}
+            interactive={true}
+            onCloudClick={(event: ThreeEvent<MouseEvent>) => {
+              event.stopPropagation();
+              handleSceneInteraction(event);
+              setAccessibilityMessage('Interacting with cloud formation');
+            }}
           />
           
-          {/* Weather precipitation effects */}
-          {isRaining && <RainSystem intensity={rainIntensity} />}
-          {isSnowing && <SnowSystem intensity={snowIntensity} />}
+          <AtmosphericEffects 
+            condition={condition}
+            temperature={temperature}
+            windSpeed={windSpeed}
+            intensity={intensity}
+          />
           
-          {/* Atmospheric effects */}
-          {isFoggy && <FogEffect density={fogDensity} timeOfDay={timeOfDay} />}
-          {hasLightning && <LightningEffect enabled={true} intensity={lightningIntensity} />}
-          
-          {/* Ground */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1, 0]} receiveShadow>
-            <planeGeometry args={[100, 100]} />
+          {/* Enhanced ground with better materials */}
+          <mesh 
+            rotation={[-Math.PI / 2, 0, 0]} 
+            position={[0, -1, 0]} 
+            receiveShadow
+            onClick={(event) => {
+              event.stopPropagation();
+              handleSceneInteraction(event);
+            }}
+            userData={{
+              interactive: true,
+              type: 'ground',
+              description: `Ground surface showing ${isSnowing ? 'snow cover' : 'terrain'}`
+            }}
+          >
+            <planeGeometry args={[100, 100, 32, 32]} />
             <meshStandardMaterial 
-              color={
-                isSnowing ? '#f5f5f5' : 
-                (timeOfDay === 'day' ? '#2ecc71' : '#196f3d')
-              } 
+              color={isSnowing ? '#f5f5f5' : (timeOfDay === 'day' ? '#2ecc71' : '#196f3d')}
+              roughness={0.8}
+              metalness={0.1}
+              envMapIntensity={0.5}
             />
           </mesh>
         </Suspense>
         
         {/* Post-processing effects */}
-        <EffectComposer enabled={true}>
-          <Bloom
-            intensity={bloomIntensity}
-            luminanceThreshold={0.2}
-            luminanceSmoothing={0.9}
-            blendFunction={BlendFunction.SCREEN}
-          />
-          <Vignette 
-            darkness={vignetteIntensity} 
-            offset={0.5} 
-            blendFunction={BlendFunction.NORMAL}
-          />
-          
-          {/* Weather effects with proper conditional rendering */}
-          <WeatherEffects 
-            isRaining={isRaining}
-            isSnowing={isSnowing}
-            hasLightning={hasLightning}
-            isFoggy={isFoggy}
-          />
-        </EffectComposer>
+        <Suspense fallback={null}>
+          <EffectComposer>
+            <SMAA />
+            <Bloom
+              intensity={isDark ? 0.8 : 0.5}
+              luminanceThreshold={0.2}
+              luminanceSmoothing={0.9}
+              kernelSize={KernelSize.LARGE}
+            />
+            <Vignette
+              darkness={isDark ? 0.7 : 0.3}
+              offset={0.5}
+            />
+            <DynamicEffects 
+              condition={condition}
+              intensity={intensity}
+            />
+          </EffectComposer>
+        </Suspense>
         
-        {/* Controls */}
         <OrbitControls 
           enableZoom={false}
           enablePan={false}
@@ -350,11 +569,29 @@ const WeatherScene: React.FC<WeatherSceneProps> = ({
           rotateSpeed={0.5}
         />
         
-        {/* Uncomment for performance stats (development only) */}
-        {/* <Stats /> */}
+        <AccessibilityManager
+          condition={condition}
+          timeOfDay={timeOfDay}
+          onFocus={(description) => setAccessibilityMessage(description)}
+        />
       </Canvas>
       
-      {/* Transition indicator - only visible during development */}
+      {/* Accessibility status messages */}
+      <div 
+        className="sr-only" 
+        role="status" 
+        aria-live="polite"
+      >
+        {accessibilityMessage}
+      </div>
+
+      {/* Performance indicator */}
+      {showPerformanceStats && (
+        <div className="absolute top-2 right-2 bg-black/50 text-white px-2 py-1 text-xs rounded">
+          Performance Mode: {transitionProgress < 1 ? 'Optimized' : 'Normal'}
+        </div>
+      )}
+
       {isTransitioning && (
         <div className="absolute bottom-2 left-2 bg-black/50 text-white px-2 py-1 text-xs rounded">
           Transitioning: {Math.round(transitionProgress * 100)}%
@@ -362,6 +599,38 @@ const WeatherScene: React.FC<WeatherSceneProps> = ({
       )}
     </div>
   );
+};
+
+// Dynamic effects component
+const DynamicEffects: React.FC<{ condition: string; intensity: number }> = ({ condition, intensity }) => {
+  switch (condition) {
+    case 'rain':
+      return (
+        <ChromaticAberration
+          offset={[0.002, 0.002]}
+          radialModulation
+          modulationOffset={0.5}
+        />
+      );
+    case 'snow':
+      return (
+        <ChromaticAberration
+          offset={[0.001, 0.001]}
+          radialModulation
+          modulationOffset={0.3}
+        />
+      );
+    case 'fog':
+      return (
+        <DepthOfField
+          focusDistance={0.01}
+          focalLength={0.02}
+          bokehScale={3}
+        />
+      );
+    default:
+      return null;
+  }
 };
 
 export default WeatherScene; 

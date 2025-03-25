@@ -1,6 +1,10 @@
+'use client';
+
 // weatherCache.ts
 // Enhanced caching layer for weather data to reduce API calls and improve performance
 import { cacheAnalytics } from './cacheAnalytics';
+
+const isBrowser = typeof window !== 'undefined';
 
 type CacheItem<T> = {
   data: T;
@@ -30,10 +34,11 @@ export class WeatherCache {
   };
 
   constructor() {
-    this.loadFromStorage();
-    
-    // Set up interval to clean expired items
-    setInterval(this.cleanExpired.bind(this), 5 * 60 * 1000); // Clean every 5 minutes
+    if (isBrowser) {
+      this.loadFromStorage();
+      // Set up interval to clean expired items
+      setInterval(this.cleanExpired.bind(this), 5 * 60 * 1000); // Clean every 5 minutes
+    }
   }
 
   /**
@@ -262,8 +267,8 @@ export class WeatherCache {
    * Save cache to localStorage for persistence
    */
   private saveToStorage(): void {
+    if (!isBrowser) return;
     try {
-      // Convert Map to array for storage
       const serialized = JSON.stringify(Array.from(this.cache.entries()));
       localStorage.setItem('weatherCache', serialized);
     } catch (error) {
@@ -275,20 +280,15 @@ export class WeatherCache {
    * Load cache from localStorage
    */
   private loadFromStorage(): void {
+    if (!isBrowser) return;
     try {
       const serialized = localStorage.getItem('weatherCache');
       if (serialized) {
-        // Convert stored array back to Map
         const entries = JSON.parse(serialized);
         this.cache = new Map(entries);
-        
-        // Check if any loaded items are expired
-        this.cleanExpired();
       }
     } catch (error) {
       console.error('Error loading cache from localStorage', error);
-      // If there's an error loading, start with a fresh cache
-      this.cache.clear();
     }
   }
 
@@ -299,7 +299,6 @@ export class WeatherCache {
     const now = Date.now();
     let hasExpired = false;
     
-    // Check all items for expiration
     for (const [key, item] of this.cache.entries()) {
       if (now >= item.expiresAt) {
         this.cache.delete(key);
@@ -307,8 +306,7 @@ export class WeatherCache {
       }
     }
     
-    // Only save if we actually removed something
-    if (hasExpired) {
+    if (hasExpired && isBrowser) {
       this.saveToStorage();
     }
   }

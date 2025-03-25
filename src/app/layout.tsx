@@ -5,6 +5,8 @@ import { ServiceWorkerProvider } from "./providers/ServiceWorkerProvider";
 import NavigationMenu from "./components/NavigationMenu";
 import { UserPreferencesProvider } from "./hooks/useUserPreferences";
 import ErrorBoundary from "@/components/ui/ErrorBoundary";
+import { APIStatusIndicator } from "./components/APIStatusIndicator";
+import { apiHealthCheck } from "./lib/apiHealthCheck";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,6 +23,11 @@ export const metadata: Metadata = {
   description: "Modern weather application with offline support",
   manifest: "/manifest.json",
 };
+
+// Initialize API health monitoring
+if (typeof window !== 'undefined') {
+  apiHealthCheck.startMonitoring();
+}
 
 export default function RootLayout({
   children,
@@ -41,6 +48,7 @@ export default function RootLayout({
             <ErrorBoundary>
               {children}
               <NavigationMenu />
+              <APIStatusIndicator />
             </ErrorBoundary>
           </ServiceWorkerProvider>
         </UserPreferencesProvider>

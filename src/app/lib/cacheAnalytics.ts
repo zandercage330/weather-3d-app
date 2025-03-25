@@ -1,7 +1,11 @@
+'use client';
+
 /**
  * cacheAnalytics.ts
  * Tracks and analyzes cache performance and API usage
  */
+
+const isBrowser = typeof window !== 'undefined';
 
 interface ApiCallRecord {
   endpoint: string;
@@ -36,10 +40,11 @@ class CacheAnalyticsService {
   private readonly ANALYTICS_STORAGE_KEY = 'weatherAppAnalytics';
   
   constructor() {
-    this.loadFromStorage();
-    
-    // Set up periodic storage
-    setInterval(this.saveToStorage.bind(this), 5 * 60 * 1000); // Every 5 minutes
+    if (isBrowser) {
+      this.loadFromStorage();
+      // Set up periodic storage
+      setInterval(this.saveToStorage.bind(this), 5 * 60 * 1000); // Every 5 minutes
+    }
   }
   
   /**
@@ -185,6 +190,7 @@ class CacheAnalyticsService {
   }
   
   private saveToStorage(): void {
+    if (!isBrowser) return;
     try {
       localStorage.setItem(this.ANALYTICS_STORAGE_KEY, JSON.stringify(this.analytics));
     } catch (error) {
@@ -193,6 +199,7 @@ class CacheAnalyticsService {
   }
   
   private loadFromStorage(): void {
+    if (!isBrowser) return;
     try {
       const stored = localStorage.getItem(this.ANALYTICS_STORAGE_KEY);
       if (stored) {
@@ -204,5 +211,5 @@ class CacheAnalyticsService {
   }
 }
 
-// Export a singleton instance
+// Create a singleton instance
 export const cacheAnalytics = new CacheAnalyticsService(); 

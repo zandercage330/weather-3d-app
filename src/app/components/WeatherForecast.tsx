@@ -5,6 +5,7 @@ import { ForecastDay } from '../lib/weatherService';
 import { UserPreferences } from '../hooks/useUserPreferences';
 import { toCelsius } from '../lib/weatherService';
 import GlassCard from './GlassCard';
+import { ForecastSkeleton } from './ui/loading';
 
 interface WeatherForecastProps {
   forecastData: ForecastDay[];
@@ -33,20 +34,7 @@ export default function WeatherForecast({
 
   // Display loading skeleton while data is loading
   if (isLoading || forecastData.length === 0) {
-    return (
-      <GlassCard className="p-4 animate-pulse" intensity="medium" variant="default">
-        <div className="h-6 bg-white/20 rounded w-2/3 mb-4"></div>
-        <div className="space-y-3">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center justify-between">
-              <div className="h-4 bg-white/20 rounded w-16"></div>
-              <div className="h-8 bg-white/20 rounded w-8"></div>
-              <div className="h-4 bg-white/20 rounded w-12"></div>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-    );
+    return <ForecastSkeleton />;
   }
 
   // Get weather icon based on condition

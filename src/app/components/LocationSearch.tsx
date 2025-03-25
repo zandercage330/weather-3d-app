@@ -1,6 +1,8 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useState } from 'react';
+import { LocationSearchSkeleton } from './ui/loading';
+import { Loader2 } from 'lucide-react';
 
 interface LocationResult {
   name: string;
@@ -16,6 +18,7 @@ interface LocationSearchProps {
   onSearch: (term: string) => void;
   onResultSelect: (result: LocationResult) => void;
   onClearSearch: () => void;
+  isLoading?: boolean;
 }
 
 export default function LocationSearch({
@@ -24,7 +27,8 @@ export default function LocationSearch({
   isSearching,
   onSearch,
   onResultSelect,
-  onClearSearch
+  onClearSearch,
+  isLoading = false
 }: LocationSearchProps) {
   const [isFocused, setIsFocused] = useState(false);
 
@@ -39,6 +43,10 @@ export default function LocationSearch({
     onSearch(e.target.value);
   };
 
+  if (isLoading) {
+    return <LocationSearchSkeleton />;
+  }
+
   return (
     <div className="relative w-full">
       <form onSubmit={handleSubmit} className="w-full">
@@ -51,6 +59,7 @@ export default function LocationSearch({
             onBlur={() => setTimeout(() => setIsFocused(false), 200)}
             placeholder="Search location..."
             className="w-full py-3 px-4 pr-10 bg-black/30 backdrop-blur-md rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+            aria-label="Search for a location"
           />
           {searchTerm && (
             <button
@@ -70,9 +79,9 @@ export default function LocationSearch({
       {/* Search results dropdown */}
       {isFocused && searchResults.length > 0 && (
         <div className="absolute z-50 mt-2 w-full bg-gray-800/90 backdrop-blur-md rounded-lg shadow-xl max-h-60 overflow-auto">
-          <ul className="py-1">
+          <ul className="py-1" role="listbox">
             {searchResults.map((result, index) => (
-              <li key={index}>
+              <li key={index} role="option">
                 <button
                   type="button"
                   onClick={() => onResultSelect(result)}
@@ -92,7 +101,8 @@ export default function LocationSearch({
       {/* Loading indicator */}
       {isSearching && (
         <div className="absolute right-12 top-1/2 transform -translate-y-1/2">
-          <div data-testid="loading-spinner" className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+          <Loader2 className="h-4 w-4 animate-spin text-white" aria-hidden="true" />
+          <span className="sr-only">Searching for locations...</span>
         </div>
       )}
     </div>
